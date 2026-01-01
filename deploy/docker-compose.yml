@@ -1,0 +1,79 @@
+version: '3.8'
+
+services:
+  # MySQL 数据库
+  db:
+    image: mysql:8.0
+    container_name: public-exam-db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-123456}
+      MYSQL_DATABASE: ${DB_NAME:-public_exam_system}
+      MYSQL_USER: ${DB_USER:-exam_user}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-123456}
+    ports:
+      - "3306:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - exam-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+
+  # FastAPI 后端
+  server:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.server
+    container_name: public-exam-server
+    restart: unless-stopped
+    environment:
+      - APP_ENV=${APP_ENV:-development}
+      - DB_HOST=db
+      - DB_PORT=3306
+      - DB_NAME=${DB_NAME:-public_exam_system}
+      - DB_USER=${DB_USER:-exam_user}
+      - DB_PASSWORD=${DB_PASSWORD:-123456}
+      - JWT_SECRET=${JWT_SECRET:-your-super-secret-jwt-key}
+      - CORS_ORIGINS=http://localhost:3000,http://localhost:5173
+    ports:
+      - "8000:8000"
+    volumes:
+      - ../server:/app
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - exam-network
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # Vue3 前端 (开发模式)
+  web:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.web
+    container_name: public-exam-web
+    restart: unless-stopped
+    environment:
+      - VITE_API_BASE_URL=http://localhost:8000/api/v1
+    ports:
+      - "3000:3000"
+    volumes:
+      - ../web:/app
+      - /app/node_modules
+    depends_on:
+      - server
+    networks:
+      - exam-network
+    command: npm run dev -- --host 0.0.0.0 --port 3000
+
+volumes:
+  db_data:
+    driver: local
+
+networks:
+  exam-network:
+    driver: bridge
