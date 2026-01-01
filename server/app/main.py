@@ -45,6 +45,9 @@ async def startup_event():
     logger.info(f"启动 {settings.app_name} v{settings.app_version}")
     logger.info(f"环境: {settings.app_env}")
 
+    # 导入所有模型确保注册到Base
+    from . import models  # noqa: F401
+
     # 创建数据库表
     try:
         create_tables()
