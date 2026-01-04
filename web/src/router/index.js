@@ -14,7 +14,7 @@ const router = createRouter({
         {
           path: 'home',
           name: 'Home',
-          component: () => import('../views/home/index.vue'),
+          component: () => import('../views/dashboard/index.vue'),
           meta: { title: '首页概览', requiresAuth: true, role: 'student' }
         },
         {
