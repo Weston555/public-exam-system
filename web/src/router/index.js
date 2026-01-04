@@ -43,6 +43,20 @@ const router = createRouter({
           component: () => import('../views/wrong/index.vue'),
           meta: { title: '错题本', requiresAuth: true, role: 'student' }
         }
+        ,
+        {
+          path: 'mock',
+          name: 'Mock',
+          component: () => import('../views/mock/index.vue'),
+          meta: { title: '模拟考试', requiresAuth: true, role: 'student' }
+        }
+        ,
+        {
+          path: 'exam',
+          name: 'Exam',
+          component: () => import('../views/exam/index.vue'),
+          meta: { title: '答题', requiresAuth: true, role: 'student' }
+        }
       ]
     },
     {
@@ -85,6 +99,13 @@ const router = createRouter({
           name: 'AdminUsers',
           component: () => import('../views/admin/users.vue'),
           meta: { title: '用户与权限', requiresAuth: true, role: 'admin' }
+        }
+        ,
+        {
+          path: 'exams',
+          name: 'AdminExams',
+          component: () => import('../views/admin/exams.vue'),
+          meta: { title: '考试管理', requiresAuth: true, role: 'admin' }
         }
       ]
     },

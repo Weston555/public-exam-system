@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List, Union
 from pydantic import BaseModel
 from datetime import datetime, timedelta
+import re
 
 from ....core.database import get_db
 from ....models.attempt import Attempt, Answer
@@ -184,36 +185,99 @@ async def submit_attempt(
                 is_correct = user_bool == correct_bool and user_bool is not None
 
             elif question.type == "FILL":
-                # 填空题：严格字符串匹配（可后续扩展模糊匹配）
-                user_ans = (user_answer[0] if user_answer else "").strip()
-                correct_ans = (correct_answer[0] if correct_answer else "").strip()
-                is_correct = user_ans == correct_ans
+                # 填空题：规范化比较（去首尾空白、连续空格压缩、忽略大小写）
+                def normalize_text(s: str) -> str:
+                    s2 = re.sub(r"\s+", " ", s.strip())
+                    return s2.lower()
 
-            else:
-                # 其他题型（简答等）：暂时不判分
+                user_ans_raw = (user_answer[0] if user_answer else "")
+                user_norm = normalize_text(str(user_ans_raw))
+
+                # support multiple correct answers
+                is_correct = False
+                if isinstance(correct_answer, list) and correct_answer:
+                    for ca in correct_answer:
+                        if normalize_text(str(ca)) == user_norm:
+                            is_correct = True
+                            break
+                else:
+                    correct_ans = (correct_answer[0] if correct_answer else "")
+                    is_correct = normalize_text(str(correct_ans)) == user_norm
+
+            elif question.type == "SHORT":
+                # 简答题：关键词命中评分（MVP）
+                # Expect question.answer_json to be like: {"keywords": [...], "min_hit": 2}
+                matched_keywords = []
+                user_text = (user_answer[0] if user_answer else "") if isinstance(user_answer, list) else (user_answer or "")
+                user_text_norm = user_text.lower()
+
+                score_awarded = 0.0
                 is_correct = False
 
-            # 计算得分
-            score_awarded = 2.0 if is_correct else 0.0
+                if isinstance(correct_answer, dict) and "keywords" in correct_answer:
+                    keywords = [str(k).lower() for k in correct_answer.get("keywords", [])]
+                    min_hit = int(correct_answer.get("min_hit", max(1, len(keywords))))
+                    for kw in keywords:
+                        if kw and kw in user_text_norm:
+                            matched_keywords.append(kw)
+                    hit = len(matched_keywords)
+                    if hit >= min_hit:
+                        is_correct = True
+                        score_awarded = 2.0
+                    else:
+                        # fallback: partial credit if any keyword matched
+                        if hit > 0:
+                            is_correct = False
+                            score_awarded = 1.0
+                        else:
+                            is_correct = False
+                            score_awarded = 0.0
+                else:
+                    # fallback: if correct_answer provided as list of keywords
+                    if isinstance(correct_answer, list) and correct_answer:
+                        keywords = [str(k).lower() for k in correct_answer]
+                        for kw in keywords:
+                            if kw and kw in user_text_norm:
+                                matched_keywords.append(kw)
+                        if matched_keywords:
+                            is_correct = False
+                            score_awarded = 1.0
+                        else:
+                            is_correct = False
+                            score_awarded = 0.0
+                    else:
+                        # no scoring rule available, default no score
+                        is_correct = False
+                        score_awarded = 0.0
 
-            # 更新答案记录
+            # 计算得分及更新答案记录
+            # For SHORT we may have already set score_awarded above
+            if question.type != "SHORT":
+                score_awarded = 2.0 if is_correct else 0.0
+
+            # Update answer record
             answer.is_correct = is_correct
-            answer.score_awarded = score_awarded
+            answer.score_awarded = float(score_awarded)
 
             total_score += score_awarded
             if is_correct:
                 correct_count += 1
 
             # 收集结果
-            results.append({
+            res_item = {
                 "question_id": question.id,
                 "question_stem": question.stem,
                 "is_correct": is_correct,
-                "score_awarded": score_awarded,
+                "score_awarded": float(score_awarded),
                 "correct_answer": question.answer_json,
                 "user_answer": answer.answer_json,
                 "analysis": question.analysis
-            })
+            }
+            # include matched keywords for SHORT if available
+            if question.type == "SHORT":
+                res_item["matched_keywords"] = matched_keywords if 'matched_keywords' in locals() else []
+
+            results.append(res_item)
 
             # 为知识点更新掌握度统计
             for kp_map in question.knowledge_points:
@@ -421,3 +485,34 @@ async def get_attempt_detail(
         "exam": exam_info,
         "questions": questions
     }
+
+
+@router.get("/history")
+async def get_attempts_history(
+    category: Optional[str] = None,
+    limit: int = 20,
+    current_user: dict = Depends(get_current_student),
+    db: Session = Depends(get_db)
+):
+    """获取当前用户的作答历史（可按考试类别过滤）"""
+    try:
+        query = db.query(Attempt).filter(Attempt.user_id == current_user["id"], Attempt.status == "SUBMITTED")
+        if category:
+            # join Exam
+            from ....models.paper import Exam as ExamModel
+            query = query.join(ExamModel, Attempt.exam_id == ExamModel.id).filter(ExamModel.category == category)
+
+        attempts = query.order_by(Attempt.submitted_at.desc()).limit(limit).all()
+        items = []
+        for a in attempts:
+            items.append({
+                "attempt_id": a.id,
+                "exam_id": a.exam_id,
+                "exam_title": a.exam.title if a.exam else None,
+                "total_score": float(a.total_score) if a.total_score is not None else None,
+                "submitted_at": a.submitted_at.isoformat() if a.submitted_at else None,
+                "duration_minutes": a.exam.duration_minutes if a.exam else None
+            })
+        return {"items": items}
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))

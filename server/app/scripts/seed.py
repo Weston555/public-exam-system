@@ -211,6 +211,50 @@ def seed_database():
 
             print("✅ 创建诊断考试")
 
+        # 创建示例 MOCK 考试（避免重复创建）
+        mock_title = "模拟考试（样例）"
+        existing_mock = db.query(Exam).filter(Exam.category == "MOCK", Exam.title == mock_title).first()
+        if not existing_mock:
+            # 抽取题库中最多 30 题，尽量覆盖多个知识点
+            all_questions = db.query(Question).all()
+            if len(all_questions) >= 1:
+                sample_count = min(30, max(5, len(all_questions)))
+                # if not enough distinct questions, cycle to fill sample_count
+                from itertools import cycle, islice
+                samples = list(islice(cycle(all_questions), sample_count))
+
+                # 创建试卷
+                mock_paper = Paper(
+                    title="模拟考试试卷(样例)",
+                    mode="AUTO",
+                    total_score=float(len(samples) * 2.0),
+                    created_by=1
+                )
+                db.add(mock_paper)
+                db.flush()
+
+                for i, q in enumerate(samples):
+                    pq = PaperQuestion(
+                        paper_id=mock_paper.id,
+                        question_id=q.id,
+                        order_no=i+1,
+                        score=2.0
+                    )
+                    db.add(pq)
+
+                mock_exam = Exam(
+                    paper_id=mock_paper.id,
+                    title=mock_title,
+                    category="MOCK",
+                    duration_minutes=60,
+                    status="PUBLISHED",
+                    created_by=1
+                )
+                db.add(mock_exam)
+                print("✅ 创建示例 MOCK 考试")
+            else:
+                print("⚠️ 题库题目不足，未创建 MOCK 示例")
+
         db.commit()
         print("🎉 数据库初始化完成！")
 
