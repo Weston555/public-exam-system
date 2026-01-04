@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
+import axios from 'axios'
 
 export const useAuthStore = defineStore('auth', () => {
   const token = ref(localStorage.getItem('token') || '')
@@ -11,25 +12,69 @@ export const useAuthStore = defineStore('auth', () => {
 
   const router = useRouter()
 
-  function login({ account, password, userRole }) {
-    // TODO: 这里后续可替换为真实后端接口调用
-    if (!account || !password) {
-      throw new Error('账号和密码不能为空')
+  // 配置axios实例
+  const api = axios.create({
+    baseURL: import.meta.env.VITE_API_BASE_URL || '/api/v1',
+    timeout: 10000
+  })
+
+  // 设置axios请求拦截器
+  api.interceptors.request.use(
+    (config) => {
+      if (token.value) {
+        config.headers.Authorization = `Bearer ${token.value}`
+      }
+      return config
+    },
+    (error) => Promise.reject(error)
+  )
+
+  async function login({ account, password, userRole }) {
+    try {
+      const response = await api.post('/auth/login', {
+        username: account,
+        password: password
+      })
+
+      token.value = response.data.access_token
+      role.value = response.data.role
+      username.value = account
+
+      localStorage.setItem('token', token.value)
+      localStorage.setItem('role', role.value)
+      localStorage.setItem('username', username.value)
+
+      // 根据角色跳转
+      if (role.value === 'admin') {
+        router.push('/admin')
+      } else {
+        router.push('/home')
+      }
+    } catch (error) {
+      if (error.response) {
+        throw new Error(error.response.data.detail || '登录失败')
+      } else {
+        throw new Error('网络错误，请重试')
+      }
     }
+  }
 
-    token.value = 'mock-token'
-    role.value = userRole
-    username.value = account
+  async function register({ username: regUsername, password, role: userRole }) {
+    try {
+      await api.post('/auth/register', {
+        username: regUsername,
+        password,
+        role: userRole.toUpperCase()
+      })
 
-    localStorage.setItem('token', token.value)
-    localStorage.setItem('role', role.value)
-    localStorage.setItem('username', username.value)
-
-    // 根据角色跳转不同端
-    if (userRole === 'admin') {
-      router.push('/admin')
-    } else {
-      router.push('/home')
+      // 注册成功后自动登录
+      await login({ account: regUsername, password, userRole })
+    } catch (error) {
+      if (error.response) {
+        throw new Error(error.response.data.detail || '注册失败')
+      } else {
+        throw new Error('网络错误，请重试')
+      }
     }
   }
 
@@ -49,7 +94,9 @@ export const useAuthStore = defineStore('auth', () => {
     username,
     isAuthenticated,
     login,
-    logout
+    register,
+    logout,
+    api
   }
 })
 

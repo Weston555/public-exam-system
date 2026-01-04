@@ -54,12 +54,11 @@ const handleRegister = async () => {
     return
   }
 
-  // 这里先复用本地 login 逻辑，后续接入后端注册接口后再调整
   try {
-    await authStore.login({
-      account: form.account,
+    await authStore.register({
+      username: form.account,
       password: form.password,
-      userRole: form.role
+      role: form.role
     })
     ElMessage.success('注册成功，已自动登录')
   } catch (e) {

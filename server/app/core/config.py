@@ -1,5 +1,6 @@
 from typing import List, Optional
 from pydantic_settings import BaseSettings
+from pydantic import field_validator
 
 
 class Settings(BaseSettings):
@@ -22,7 +23,15 @@ class Settings(BaseSettings):
     jwt_access_token_expire_minutes: int = 30
 
     # CORS 配置
-    cors_origins: List[str] = ["http://localhost:3000", "http://localhost:5173"]
+    # 支持通过环境变量传入 JSON 列表或逗号分隔字符串
+    cors_origins: List[str] = [
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:5173",
+        "http://localhost:5174",
+        "http://127.0.0.1:5174"
+    ]
 
     # 文件上传配置
     upload_dir: str = "uploads"
@@ -50,6 +59,42 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = False
+
+    # 兼容环境变量传入多种格式：JSON 列表或逗号分隔字符串
+    @field_validator("cors_origins", mode="before")
+    def _parse_cors_origins(cls, v):
+        from typing import List
+        import json
+
+        if v is None:
+            return []
+
+        # Already a list
+        if isinstance(v, (list, tuple)):
+            return list(v)
+
+        # Try parse JSON
+        if isinstance(v, str):
+            s = v.strip()
+            # JSON list like '["http://...","http://..."]'
+            if s.startswith("[") and s.endswith("]"):
+                try:
+                    parsed = json.loads(s)
+                    if isinstance(parsed, list):
+                        return [str(x).strip() for x in parsed]
+                except Exception:
+                    pass
+
+            # Comma separated: "http://a,http://b"
+            if "," in s:
+                parts = [p.strip() for p in s.split(",") if p.strip()]
+                return parts
+
+            # Single origin string
+            return [s]
+
+        # Fallback: return as-is in list
+        return [v]
 
     @property
     def database_url(self) -> str:

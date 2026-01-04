@@ -44,6 +44,7 @@ async def startup_event():
     """应用启动时的初始化"""
     logger.info(f"启动 {settings.app_name} v{settings.app_version}")
     logger.info(f"环境: {settings.app_env}")
+    logger.info(f"CORS origins: {settings.cors_origins}")
 
     # 导入所有模型确保注册到Base
     from . import models  # noqa: F401

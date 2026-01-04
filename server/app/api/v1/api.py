@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from .endpoints import auth, users, knowledge, questions, papers, exams, attempts, goals, plans, analytics
+from .endpoints import auth, users, knowledge, questions, papers, exams, attempts, goals, plans, analytics, practice
 
 # 创建主API路由器
 api_router = APIRouter()
@@ -16,3 +16,4 @@ api_router.include_router(attempts.router, prefix="/attempts", tags=["作答记�
 api_router.include_router(goals.router, prefix="/goals", tags=["学习目标"])
 api_router.include_router(plans.router, prefix="/plans", tags=["学习计划"])
 api_router.include_router(analytics.router, prefix="/analytics", tags=["数据分析"])
+api_router.include_router(practice.router, prefix="/practice", tags=["practice"])

@@ -29,6 +29,20 @@ const router = createRouter({
           component: () => import('../views/diagnostic/index.vue'),
           meta: { title: '基线诊断', requiresAuth: true, role: 'student' }
         }
+        ,
+        {
+          path: 'practice',
+          name: 'Practice',
+          component: () => import('../views/practice/index.vue'),
+          meta: { title: '专项练习', requiresAuth: true, role: 'student' }
+        }
+        ,
+        {
+          path: 'wrong',
+          name: 'Wrong',
+          component: () => import('../views/wrong/index.vue'),
+          meta: { title: '错题本', requiresAuth: true, role: 'student' }
+        }
       ]
     },
     {
