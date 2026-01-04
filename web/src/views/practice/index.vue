@@ -39,9 +39,11 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
+import { useRouter } from 'vue-router'
 import { useAuthStore } from '../../stores/auth'
 
 const authStore = useAuthStore()
+const router = useRouter()
 const loading = ref(false)
 const form = ref({
   knowledge_id: null,
@@ -87,10 +89,8 @@ const startPractice = async () => {
     const examId = res.data.exam_id
     // 启动考试，复用 /exams/{id}/start
     const start = await authStore.api.post(`/exams/${examId}/start`)
-    // 跳转到诊断答题页面（diagnostic 组件可处理 attempt_id）
-    // 简单方式：将 attempt info 存到 localStorage 然后跳转
     localStorage.setItem('current_attempt', JSON.stringify(start.data))
-    window.location.href = '/diagnostic'
+    router.push({ path: '/exam', query: { attempt_id: start.data.attempt_id } })
   } catch (e) {
     ElMessage.error(e.response?.data?.detail || '生成练习失败')
   } finally {

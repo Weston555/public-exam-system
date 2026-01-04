@@ -389,6 +389,29 @@ const restartDiagnostic = () => {
   answers.value = []
   currentAnswer.value = ''
 }
+
+// 尝试从 localStorage 恢复正在进行的 attempt（practice / wrong 等页面可能会写入）
+onMounted(() => {
+  try {
+    const saved = localStorage.getItem('current_attempt')
+    if (saved) {
+      const parsed = JSON.parse(saved)
+      if (parsed && parsed.attempt_id && Array.isArray(parsed.questions) && parsed.questions.length > 0) {
+        examData.value = parsed
+        // 从头开始答题，或可改为恢复到 saved.current_index
+        currentQuestionIndex.value = 0
+        answers.value = new Array(parsed.questions.length).fill('')
+        // 如果 question 中包含 saved_answer，则优先使用
+        currentAnswer.value = parsed.questions[0]?.saved_answer || ''
+        // 清理，避免重复恢复；如果希望保留则注释下一行
+        localStorage.removeItem('current_attempt')
+        ElMessage.info('已从本地恢复未完成的考试，继续答题')
+      }
+    }
+  } catch (err) {
+    console.error('恢复本地考试数据失败:', err)
+  }
+})
 </script>
 
 <style scoped>

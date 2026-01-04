@@ -26,9 +26,17 @@
             <el-icon><EditPen /></el-icon>
             <span>针对性练习</span>
           </el-menu-item>
-          <el-menu-item index="/diagnosis">
+          <el-menu-item index="/diagnostic">
             <el-icon><DataAnalysis /></el-icon>
             <span>基线诊断</span>
+          </el-menu-item>
+          <el-menu-item index="/wrong">
+            <el-icon><DocumentDelete /></el-icon>
+            <span>错题本</span>
+          </el-menu-item>
+          <el-menu-item index="/mock">
+            <el-icon><Trophy /></el-icon>
+            <span>模拟考试</span>
           </el-menu-item>
         </el-menu>
       </el-aside>

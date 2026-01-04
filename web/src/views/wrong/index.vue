@@ -34,9 +34,11 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
+import { useRouter } from 'vue-router'
 import { useAuthStore } from '../../stores/auth'
 
 const authStore = useAuthStore()
+const router = useRouter()
 const mode = ref('all')
 const items = ref([])
 const generating = ref(false)
@@ -57,7 +59,7 @@ const generateReview = async () => {
     const examId = res.data.exam_id
     const startRes = await authStore.api.post(`/exams/${examId}/start`)
     localStorage.setItem('current_attempt', JSON.stringify(startRes.data))
-    window.location.href = '/diagnostic'
+    router.push({ path: '/exam', query: { attempt_id: startRes.data.attempt_id } })
   } catch (e) {
     ElMessage.error(e.response?.data?.detail || '生成复习失败')
   } finally {
