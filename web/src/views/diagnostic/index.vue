@@ -180,10 +180,10 @@
                   <h4>诊断成绩</h4>
                   <div class="score-display">
                     <span class="score-number">{{ result.total_score }}</span>
-                    <span class="score-total">/ {{ totalQuestions * 2 }}</span>
+                    <span class="score-total">/ {{ getTotalPossibleScore() }}</span>
                   </div>
                   <div class="score-meta">
-                    正确率：{{ Math.round(result.total_score / (totalQuestions * 2) * 100) }}%
+                    正确率：{{ Math.round(result.total_score / getTotalPossibleScore() * 100) }}%
                   </div>
                 </div>
               </el-card>
@@ -214,6 +214,39 @@
             重新诊断
           </el-button>
         </div>
+
+        <!-- 题目详情与解析 -->
+        <div class="question-details" v-if="result.results && result.results.length > 0">
+          <el-divider>题目详情与解析</el-divider>
+          <el-collapse v-model="activeNames">
+            <el-collapse-item
+              v-for="(item, index) in result.results"
+              :key="item.question_id"
+              :name="index"
+              :title="`Q${index + 1}: ${item.question_stem.substring(0, 50)}${item.question_stem.length > 50 ? '...' : ''}`"
+            >
+              <div class="question-result-detail">
+                <p><strong>你的答案:</strong>
+                  <span :class="{ 'correct-answer': item.is_correct, 'wrong-answer': !item.is_correct }">
+                    {{ formatAnswer(item.user_answer) }}
+                  </span>
+                </p>
+                <p><strong>正确答案:</strong>
+                  <span class="correct-answer">{{ formatAnswer(item.correct_answer) }}</span>
+                </p>
+                <p><strong>判分:</strong>
+                  <el-tag :type="item.is_correct ? 'success' : 'danger'">
+                    {{ item.is_correct ? '正确' : '错误' }} (得分: {{ item.score_awarded }})
+                  </el-tag>
+                </p>
+                <p v-if="item.analysis"><strong>解析:</strong> {{ item.analysis }}</p>
+                <p v-if="item.matched_keywords && item.matched_keywords.length > 0">
+                  <strong>命中关键词:</strong> {{ item.matched_keywords.join('、') }} ({{ item.matched_keywords.length }}个)
+                </p>
+              </div>
+            </el-collapse-item>
+          </el-collapse>
+        </div>
       </div>
     </el-card>
   </div>
@@ -233,6 +266,7 @@ const result = ref(null)
 const currentQuestionIndex = ref(0)
 const answers = ref([])
 const currentAnswer = ref('')
+const activeNames = ref([]) // For collapse in results
 
 const totalQuestions = computed(() => {
   return examData.value?.questions?.length || 0
@@ -271,6 +305,22 @@ const getWeakPointsText = () => {
     return '暂无'
   }
   return result.value.weak_points.slice(0, 3).join('、') + (result.value.weak_points.length > 3 ? '等' : '')
+}
+
+const formatAnswer = (answer) => {
+  if (Array.isArray(answer)) {
+    return answer.join(', ')
+  }
+  return answer || '未作答'
+}
+
+const getTotalPossibleScore = () => {
+  if (!result.value?.results) return totalQuestions.value * 2
+  return result.value.results.reduce((total, item) => {
+    // 假设每题分数在后端返回中可以获取，或者用固定值
+    // 这里暂时用2.0作为默认值，后续可从后端返回每题分数
+    return total + 2.0
+  }, 0)
 }
 
 const startDiagnostic = async () => {
@@ -648,6 +698,31 @@ onMounted(() => {
   display: flex;
   justify-content: center;
   gap: 20px;
+}
+
+.question-details {
+  margin-top: 30px;
+}
+
+.question-result-detail {
+  text-align: left;
+  padding-left: 20px;
+  border-left: 3px solid #e4e7ed;
+  margin-top: 10px;
+}
+
+.question-result-detail p {
+  margin-bottom: 8px;
+}
+
+.correct-answer {
+  color: #67c23a;
+  font-weight: 500;
+}
+
+.wrong-answer {
+  color: #f56c6c;
+  font-weight: 500;
 }
 
 /* 响应式设计 */

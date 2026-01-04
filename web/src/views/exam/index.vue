@@ -57,6 +57,62 @@
           <el-button v-else type="success" @click="submitExam" :loading="submitting">提交</el-button>
         </div>
       </div>
+
+      <!-- 结果展示（只在viewOnly模式下显示） -->
+      <div v-else-if="viewOnly && result" class="result-section">
+        <el-alert
+          title="考试已完成！"
+          type="success"
+          :closable="false"
+          class="result-alert"
+        />
+
+        <div class="result-summary">
+          <el-row :gutter="20">
+            <el-col :span="12">
+              <el-statistic title="总得分" :value="result.total_score" />
+            </el-col>
+            <el-col :span="12">
+              <el-statistic title="总题数" :value="result.results.length" />
+            </el-col>
+          </el-row>
+        </div>
+
+        <el-divider>题目详情与解析</el-divider>
+        <el-collapse v-model="activeNames">
+          <el-collapse-item
+            v-for="(item, index) in result.results"
+            :key="item.question_id"
+            :name="index"
+            :title="`Q${index + 1}: ${item.question_stem.substring(0, 50)}${item.question_stem.length > 50 ? '...' : ''}`"
+          >
+            <div class="question-result-detail">
+              <p><strong>你的答案:</strong>
+                <span :class="{ 'correct-answer': item.is_correct, 'wrong-answer': !item.is_correct }">
+                  {{ formatAnswer(item.user_answer) }}
+                </span>
+              </p>
+              <p><strong>正确答案:</strong>
+                <span class="correct-answer">{{ formatAnswer(item.correct_answer) }}</span>
+              </p>
+              <p><strong>判分:</strong>
+                <el-tag :type="item.is_correct ? 'success' : 'danger'">
+                  {{ item.is_correct ? '正确' : '错误' }} (得分: {{ item.score_awarded }})
+                </el-tag>
+              </p>
+              <p v-if="item.analysis"><strong>解析:</strong> {{ item.analysis }}</p>
+              <p v-if="item.matched_keywords && item.matched_keywords.length > 0">
+                <strong>命中关键词:</strong> {{ item.matched_keywords.join('、') }} ({{ item.matched_keywords.length }}个)
+              </p>
+            </div>
+          </el-collapse-item>
+        </el-collapse>
+
+        <div class="result-actions" style="margin-top: 20px;">
+          <el-button type="primary" @click="router.push('/home')">返回首页</el-button>
+          <el-button @click="router.back()">返回上一页</el-button>
+        </div>
+      </div>
     </el-card>
   </div>
 </template>
@@ -77,6 +133,9 @@ const examData = ref(null)
 const currentIndex = ref(0)
 const currentAnswer = ref('')
 const remainingSeconds = ref(null)
+const viewOnly = ref(false)
+const result = ref(null)
+const activeNames = ref([]) // For collapse in results
 let timerHandle = null
 
 const totalQuestions = computed(() => examData.value?.questions?.length || 0)
@@ -87,6 +146,32 @@ function formatTime(sec) {
   const m = Math.floor(sec / 60)
   const s = sec % 60
   return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`
+}
+
+function formatAnswer(answer) {
+  if (Array.isArray(answer)) {
+    return answer.join(', ')
+  }
+  return answer || '未作答'
+}
+
+async function loadResult(attemptId) {
+  try {
+    loading.value = true
+    const res = await authStore.api.get(`/attempts/${attemptId}/result`)
+    result.value = res.data
+    // Set exam data for display
+    examData.value = {
+      exam: { title: result.value.exam_title },
+      questions: result.value.results.map(r => ({
+        question: { stem: r.question_stem, type: 'COMPLETED' }
+      }))
+    }
+  } catch (e) {
+    ElMessage.error('加载结果失败')
+  } finally {
+    loading.value = false
+  }
 }
 
 async function loadAttempt(attemptId) {
@@ -162,8 +247,14 @@ async function submitExam() {
     await saveAnswer()
     const res = await authStore.api.post(`/attempts/${examData.value.attempt_id}/submit`)
     ElMessage.success('提交完成')
-    // go to result view (reuse diagnostic result route or show)
-    router.push({ path: '/home' })
+    // go to result view
+    router.push({
+      path: '/exam',
+      query: {
+        attempt_id: examData.value.attempt_id,
+        view_only: 'true'
+      }
+    })
   } catch (e) {
     if (e === 'cancel') return
     ElMessage.error(e.response?.data?.detail || '提交失败')
@@ -174,12 +265,20 @@ async function submitExam() {
 
 onMounted(() => {
   const attemptId = route.query.attempt_id
+  const viewOnlyParam = route.query.view_only === 'true'
+  viewOnly.value = viewOnlyParam
+
   if (!attemptId) {
     ElMessage.error('缺少 attempt_id')
     router.push('/home')
     return
   }
-  loadAttempt(attemptId)
+
+  if (viewOnly.value) {
+    loadResult(attemptId)
+  } else {
+    loadAttempt(attemptId)
+  }
 })
 </script>
 
@@ -189,6 +288,39 @@ onMounted(() => {
 .timer { color: #f56c6c; font-weight: 600; }
 .question-area { padding: 20px 0; }
 .actions { display:flex; gap:10px; justify-content:flex-end; margin-top:20px; }
+
+.result-section {
+  text-align: center;
+}
+.result-alert {
+  margin-bottom: 30px;
+}
+.result-summary {
+  margin: 30px 0;
+}
+.question-result-detail {
+  text-align: left;
+  padding-left: 20px;
+  border-left: 3px solid #e4e7ed;
+  margin-top: 10px;
+}
+.question-result-detail p {
+  margin-bottom: 8px;
+}
+.correct-answer {
+  color: #67c23a;
+  font-weight: 500;
+}
+.wrong-answer {
+  color: #f56c6c;
+  font-weight: 500;
+}
+.result-actions {
+  margin-top: 30px;
+}
+.result-actions .el-button {
+  margin: 0 10px;
+}
 </style>
 
 

@@ -153,6 +153,13 @@ async def submit_attempt(
             if not question:
                 continue
 
+            # 获取题目分数（从PaperQuestion读取）
+            paper_question = db.query(PaperQuestion).filter(
+                PaperQuestion.paper_id == attempt.exam.paper_id,
+                PaperQuestion.question_id == question.id
+            ).first()
+            question_score = float(paper_question.score) if paper_question else 2.0
+
             # 按题型进行判分
             is_correct = False
             user_answer = answer.answer_json or []
@@ -223,12 +230,12 @@ async def submit_attempt(
                     hit = len(matched_keywords)
                     if hit >= min_hit:
                         is_correct = True
-                        score_awarded = 2.0
+                        score_awarded = question_score
                     else:
                         # fallback: partial credit if any keyword matched
                         if hit > 0:
                             is_correct = False
-                            score_awarded = 1.0
+                            score_awarded = question_score * 0.5  # 半分
                         else:
                             is_correct = False
                             score_awarded = 0.0
@@ -241,7 +248,7 @@ async def submit_attempt(
                                 matched_keywords.append(kw)
                         if matched_keywords:
                             is_correct = False
-                            score_awarded = 1.0
+                            score_awarded = question_score * 0.5  # 半分
                         else:
                             is_correct = False
                             score_awarded = 0.0
@@ -253,7 +260,7 @@ async def submit_attempt(
             # 计算得分及更新答案记录
             # For SHORT we may have already set score_awarded above
             if question.type != "SHORT":
-                score_awarded = 2.0 if is_correct else 0.0
+                score_awarded = question_score if is_correct else 0.0
 
             # Update answer record
             answer.is_correct = is_correct
