@@ -358,3 +358,66 @@ async def get_attempt_result(
         "submitted_at": attempt.submitted_at.isoformat() if attempt.submitted_at else None,
         "results": results
     }
+
+
+@router.get("/{attempt_id}")
+async def get_attempt_detail(
+    attempt_id: int,
+    current_user: dict = Depends(get_current_student),
+    db: Session = Depends(get_db)
+):
+    """获取 attempt 详情（用于答题页面恢复）"""
+    attempt = db.query(Attempt).filter(
+        Attempt.id == attempt_id,
+        Attempt.user_id == current_user["id"]
+    ).first()
+
+    if not attempt:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="作答记录不存在"
+        )
+
+    # exam info
+    exam = attempt.exam
+    exam_info = {
+        "id": exam.id if exam else None,
+        "title": exam.title if exam else None,
+        "category": exam.category if exam else None,
+        "duration_minutes": exam.duration_minutes if exam else None
+    }
+
+    # gather questions from paper ordered by order_no
+    questions = []
+    if exam and exam.paper_id:
+        # query PaperQuestion model to build list
+    from ....models.paper import PaperQuestion
+    pqs = db.query(PaperQuestion).filter(PaperQuestion.paper_id == exam.paper_id).order_by(PaperQuestion.order_no).all()
+
+    for pq in pqs:
+        q = db.query(Question).filter(Question.id == pq.question_id).first()
+        if not q:
+            continue
+        # find saved answer if any
+        ans = db.query(Answer).filter(Answer.attempt_id == attempt_id, Answer.question_id == q.id).first()
+        saved = ans.answer_json if ans and ans.answer_json is not None else None
+
+        questions.append({
+            "id": q.id,
+            "order_no": pq.order_no,
+            "question": {
+                "id": q.id,
+                "type": q.type,
+                "stem": q.stem,
+                "options_json": q.options_json
+            },
+            "saved_answer": saved
+        })
+
+    return {
+        "attempt_id": attempt.id,
+        "status": attempt.status,
+        "started_at": attempt.started_at.isoformat() if attempt.started_at else None,
+        "exam": exam_info,
+        "questions": questions
+    }

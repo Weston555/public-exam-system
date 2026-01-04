@@ -136,7 +136,8 @@ async def start_exam(
                 "category": exam.category,
                 "duration_minutes": exam.duration_minutes
             },
-            "questions": questions
+            "questions": questions,
+            "started_at": attempt.started_at.isoformat() if attempt.started_at else None
         }
 
     except HTTPException:
