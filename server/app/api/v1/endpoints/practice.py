@@ -7,6 +7,7 @@ import random
 from ....core.database import get_db
 from ....models.question import Question
 from ....models.knowledge import QuestionKnowledgeMap
+from ....models.progress import UserKnowledgeState
 from ....models.paper import Paper, PaperQuestion, Exam
 from ..deps import get_current_student
 
@@ -62,10 +63,24 @@ async def generate_practice(
                 diff -= 1
             return picked
 
-        # Decide target difficulty: simple heuristic
-        # ADAPTIVE: try 3 first (can be enhanced later)
+        # Determine user's mastery for this knowledge point (default 0)
+        state = db.query(UserKnowledgeState).filter(
+            UserKnowledgeState.user_id == current_user["id"],
+            UserKnowledgeState.knowledge_id == knowledge_id
+        ).first()
+        mastery = float(state.mastery) if state and state.mastery is not None else 0.0
+
+        # Map mastery -> target difficulty (explainable rule)
+        # mastery < 0.3 -> target_diff = 2
+        # 0.3 <= mastery < 0.6 -> target_diff = 3
+        # mastery >= 0.6 -> target_diff = 4
         if mode == "ADAPTIVE":
-            target = 3
+            if mastery < 0.3:
+                target = 2
+            elif mastery < 0.6:
+                target = 3
+            else:
+                target = 4
         else:
             target = 3
 
@@ -84,7 +99,13 @@ async def generate_practice(
         paper = Paper(
             title=f"PRACTICE_KP_{knowledge_id}_{current_user['id']}",
             mode="AUTO",
-            config_json={"knowledge_id": knowledge_id, "count": count, "mode": mode},
+            config_json={
+                "knowledge_id": knowledge_id,
+                "count": count,
+                "mode": mode,
+                "mastery": mastery,
+                "target_diff": target
+            },
             total_score= float(len(selected) * 2.0),
             created_by=current_user["id"]
         )
