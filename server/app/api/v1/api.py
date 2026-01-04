@@ -12,6 +12,6 @@ api_router.include_router(knowledge.router, prefix="/knowledge", tags=["知识�
 api_router.include_router(questions.router, prefix="/questions", tags=["题库"])
 api_router.include_router(papers.router, prefix="/papers", tags=["试卷"])
 api_router.include_router(exams.router, prefix="/exams", tags=["考试"])
-api_router.include_router(attempts.router, prefix="/attempts", tags=["答题"])
+api_router.include_router(attempts.router, prefix="/attempts", tags=["作答记录"])
 api_router.include_router(plans.router, prefix="/plans", tags=["学习计划"])
 api_router.include_router(analytics.router, prefix="/analytics", tags=["数据分析"])

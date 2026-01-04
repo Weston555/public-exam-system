@@ -15,8 +15,8 @@ router = APIRouter()
 @router.get("/")
 async def get_exams(
     category: Optional[str] = Query(None, description="考试类别: DIAGNOSTIC, PRACTICE, MOCK"),
-    skip: int = Query(0, ge=0),
-    limit: int = Query(20, ge=1, le=100),
+    page: int = Query(1, ge=1),
+    size: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db)
 ):
     """获取考试列表"""
@@ -26,25 +26,33 @@ async def get_exams(
         if category:
             query = query.filter(Exam.category == category)
 
+        # 按创建时间倒序
+        from sqlalchemy import desc
+        query = query.order_by(desc(Exam.created_at))
+
+        # 分页
         total = query.count()
-        exams = query.offset(skip).limit(limit).all()
+        exams = query.offset((page - 1) * size).limit(size).all()
 
         result = []
         for exam in exams:
+            total_questions = len(exam.paper.paper_questions) if exam.paper else 0
             result.append({
                 "id": exam.id,
                 "title": exam.title,
                 "category": exam.category,
                 "duration_minutes": exam.duration_minutes,
                 "status": exam.status,
-                "created_at": exam.created_at
+                "total_questions": total_questions,
+                "created_at": exam.created_at.isoformat() if exam.created_at else None
             })
 
         return {
             "items": result,
             "total": total,
-            "skip": skip,
-            "limit": limit
+            "page": page,
+            "size": size,
+            "pages": (total + size - 1) // size if total > 0 else 0
         }
 
     except Exception as e:
