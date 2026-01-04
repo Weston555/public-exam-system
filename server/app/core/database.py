@@ -5,13 +5,23 @@ from contextlib import contextmanager
 
 from .config import settings
 
-# 创建数据库引擎
-engine = create_engine(
-    settings.database_url,
-    pool_pre_ping=True,
-    pool_recycle=300,
-    echo=settings.debug,
-)
+# 创建数据库引擎 (开发时使用SQLite)
+database_url = settings.database_url
+if database_url.startswith("sqlite"):
+    # SQLite特殊配置
+    engine = create_engine(
+        database_url,
+        connect_args={"check_same_thread": False},
+        echo=settings.debug,
+    )
+else:
+    # MySQL配置
+    engine = create_engine(
+        database_url,
+        pool_pre_ping=True,
+        pool_recycle=300,
+        echo=settings.debug,
+    )
 
 # 创建会话工厂
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

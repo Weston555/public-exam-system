@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     # 数据库配置
     db_host: str = "localhost"
     db_port: int = 3306
-    db_name: str = "public_exam_system"
+    db_name: str = "public_exam_system.db"
     db_user: str = "root"
     db_password: str = "123456"
 
@@ -54,7 +54,12 @@ class Settings(BaseSettings):
     @property
     def database_url(self) -> str:
         """数据库连接URL"""
-        return f"mysql+mysqlconnector://{self.db_user}:{self.db_password}@{self.db_host}:{self.db_port}/{self.db_name}"
+        if self.db_name.endswith('.db'):
+            # SQLite数据库
+            return f"sqlite:///./{self.db_name}"
+        else:
+            # MySQL数据库
+            return f"mysql+mysqlconnector://{self.db_user}:{self.db_password}@{self.db_host}:{self.db_port}/{self.db_name}"
 
     @property
     def database_url_async(self) -> str:

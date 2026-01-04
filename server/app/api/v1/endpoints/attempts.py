@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Union
 from pydantic import BaseModel
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from ....core.database import get_db
 from ....models.attempt import Attempt, Answer
@@ -16,7 +16,7 @@ router = APIRouter()
 
 class AnswerSubmit(BaseModel):
     question_id: int
-    answer: str
+    answer: Union[str, List[str]]
     time_spent_seconds: int = 0
 
 
@@ -62,6 +62,14 @@ async def submit_single_answer(
                 detail="题目不存在"
             )
 
+        # 标准化答案格式
+        if isinstance(answer_data.answer, list):
+            # 多选题：排序并转换为字符串列表
+            normalized_answer = sorted([str(ans).strip().upper() for ans in answer_data.answer if ans])
+        else:
+            # 单选/判断/填空：转换为字符串列表
+            normalized_answer = [str(answer_data.answer).strip()]
+
         # 检查是否已存在答案记录，如存在则更新，否则创建
         existing_answer = db.query(Answer).filter(
             Answer.attempt_id == attempt_id,
@@ -70,7 +78,7 @@ async def submit_single_answer(
 
         if existing_answer:
             # 更新答案
-            existing_answer.answer_json = [answer_data.answer]
+            existing_answer.answer_json = normalized_answer
             existing_answer.time_spent_seconds = answer_data.time_spent_seconds
             db.commit()
         else:
@@ -78,7 +86,7 @@ async def submit_single_answer(
             new_answer = Answer(
                 attempt_id=attempt_id,
                 question_id=answer_data.question_id,
-                answer_json=[answer_data.answer],
+                answer_json=normalized_answer,
                 time_spent_seconds=answer_data.time_spent_seconds
             )
             db.add(new_answer)
@@ -144,11 +152,48 @@ async def submit_attempt(
             if not question:
                 continue
 
-            # 简单判分逻辑 (可以根据题型扩展)
-            user_answer = answer.answer_json[0] if answer.answer_json else ""
-            correct_answer = question.answer_json[0] if question.answer_json else ""
+            # 按题型进行判分
+            is_correct = False
+            user_answer = answer.answer_json or []
+            correct_answer = question.answer_json or []
 
-            is_correct = str(user_answer).strip().lower() == str(correct_answer).strip().lower()
+            if question.type == "SINGLE":
+                # 单选题：比较第一个答案
+                user_ans = user_answer[0] if user_answer else ""
+                correct_ans = correct_answer[0] if correct_answer else ""
+                is_correct = str(user_ans).strip().upper() == str(correct_ans).strip().upper()
+
+            elif question.type == "MULTI":
+                # 多选题：比较集合
+                user_set = set(str(ans).strip().upper() for ans in user_answer)
+                correct_set = set(str(ans).strip().upper() for ans in correct_answer)
+                is_correct = user_set == correct_set
+
+            elif question.type == "JUDGE":
+                # 判断题：支持多种格式
+                user_ans = (user_answer[0] if user_answer else "").strip().upper()
+                correct_ans = (correct_answer[0] if correct_answer else "").strip().upper()
+
+                # 标准化判断题答案
+                true_values = {"T", "TRUE", "正确", "是", "YES", "Y"}
+                false_values = {"F", "FALSE", "错误", "否", "NO", "N"}
+
+                user_bool = user_ans in true_values if user_ans in true_values | false_values else None
+                correct_bool = correct_ans in true_values if correct_ans in true_values | false_values else None
+
+                is_correct = user_bool == correct_bool and user_bool is not None
+
+            elif question.type == "FILL":
+                # 填空题：严格字符串匹配（可后续扩展模糊匹配）
+                user_ans = (user_answer[0] if user_answer else "").strip()
+                correct_ans = (correct_answer[0] if correct_answer else "").strip()
+                is_correct = user_ans == correct_ans
+
+            else:
+                # 其他题型（简答等）：暂时不判分
+                is_correct = False
+
+            # 计算得分
             score_awarded = 2.0 if is_correct else 0.0
 
             # 更新答案记录
@@ -162,6 +207,7 @@ async def submit_attempt(
             # 收集结果
             results.append({
                 "question_id": question.id,
+                "question_stem": question.stem,
                 "is_correct": is_correct,
                 "score_awarded": score_awarded,
                 "correct_answer": question.answer_json,
@@ -169,21 +215,7 @@ async def submit_attempt(
                 "analysis": question.analysis
             })
 
-            # 收集错题数据
-            if not is_correct:
-                wrong_questions_data.append({
-                    "question_id": question.id,
-                    "knowledge_ids": [kp.knowledge_id for kp in question.knowledge_points]
-                })
-
-                # 为知识点更新掌握度
-                for kp_map in question.knowledge_points:
-                    kp_id = str(kp_map.knowledge_id)
-                    if kp_id not in knowledge_updates:
-                        knowledge_updates[kp_id] = {"correct": 0, "total": 0}
-                    knowledge_updates[kp_id]["total"] += 1
-
-            # 为知识点更新掌握度 (正确题目也算)
+            # 为知识点更新掌握度统计
             for kp_map in question.knowledge_points:
                 kp_id = str(kp_map.knowledge_id)
                 if kp_id not in knowledge_updates:
@@ -192,27 +224,39 @@ async def submit_attempt(
                 if is_correct:
                     knowledge_updates[kp_id]["correct"] += 1
 
+            # 收集错题数据（只针对答错的题目）
+            if not is_correct:
+                wrong_questions_data.append({
+                    "question_id": question.id
+                })
+
         # 更新错题本
         for wrong_data in wrong_questions_data:
-            for knowledge_id in wrong_data["knowledge_ids"]:
-                # 检查是否已存在错题记录
-                existing_wrong = db.query(WrongQuestion).filter(
-                    WrongQuestion.user_id == current_user["id"],
-                    WrongQuestion.question_id == wrong_data["question_id"]
-                ).first()
+            # 检查是否已存在错题记录
+            existing_wrong = db.query(WrongQuestion).filter(
+                WrongQuestion.user_id == current_user["id"],
+                WrongQuestion.question_id == wrong_data["question_id"]
+            ).first()
 
-                if existing_wrong:
-                    existing_wrong.wrong_count += 1
-                    existing_wrong.last_wrong_at = datetime.utcnow()
-                else:
-                    new_wrong = WrongQuestion(
-                        user_id=current_user["id"],
-                        question_id=wrong_data["question_id"],
-                        knowledge_id=knowledge_id,
-                        wrong_count=1,
-                        last_wrong_at=datetime.utcnow()
-                    )
-                    db.add(new_wrong)
+            # 计算下次复习时间（简单遗忘曲线）
+            def calculate_next_review(wrong_count: int) -> datetime:
+                intervals = [1, 3, 7, 14, 30]  # 错题次数对应的复习间隔（天）
+                days = intervals[min(wrong_count - 1, len(intervals) - 1)]
+                return datetime.utcnow() + timedelta(days=days)
+
+            if existing_wrong:
+                existing_wrong.wrong_count += 1
+                existing_wrong.last_wrong_at = datetime.utcnow()
+                existing_wrong.next_review_at = calculate_next_review(existing_wrong.wrong_count)
+            else:
+                new_wrong = WrongQuestion(
+                    user_id=current_user["id"],
+                    question_id=wrong_data["question_id"],
+                    wrong_count=1,
+                    last_wrong_at=datetime.utcnow(),
+                    next_review_at=calculate_next_review(1)
+                )
+                db.add(new_wrong)
 
         # 更新知识点掌握度
         for knowledge_id_str, stats in knowledge_updates.items():

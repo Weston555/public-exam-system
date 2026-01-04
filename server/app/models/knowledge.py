@@ -1,7 +1,7 @@
 from sqlalchemy import Column, String, Integer, DECIMAL, ForeignKey, Text
 from sqlalchemy.orm import relationship
 
-from .base import BaseModel
+from .base import BaseModel, Base
 
 
 class KnowledgePoint(BaseModel):
@@ -24,12 +24,13 @@ class KnowledgePoint(BaseModel):
         return f"<KnowledgePoint(id={self.id}, name='{self.name}', code='{self.code}')>"
 
 
-class QuestionKnowledgeMap(BaseModel):
+class QuestionKnowledgeMap(Base):
     """题目知识点映射模型"""
     __tablename__ = "question_knowledge_map"
 
-    question_id = Column(Integer, ForeignKey("questions.id"), primary_key=True)
-    knowledge_id = Column(Integer, ForeignKey("knowledge_points.id"), primary_key=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    question_id = Column(Integer, ForeignKey("questions.id"), nullable=False, index=True)
+    knowledge_id = Column(Integer, ForeignKey("knowledge_points.id"), nullable=False, index=True)
 
     # 关联关系
     question = relationship("Question", back_populates="knowledge_points")

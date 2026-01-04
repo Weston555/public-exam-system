@@ -1,15 +1,20 @@
 import sys
 import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# 添加当前目录和上级目录到路径
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+server_dir = os.path.dirname(parent_dir)
+sys.path.insert(0, server_dir)
 
 from sqlalchemy.orm import Session
-from ..core.database import SessionLocal, create_tables
-from ..core.security import get_password_hash
-from ..models.user import User
-from ..models.knowledge import KnowledgePoint
-from ..models.question import Question
-from ..models.knowledge import QuestionKnowledgeMap
-from ..models.paper import Paper, PaperQuestion, Exam
+from app.core.database import SessionLocal, create_tables
+from app.core.security import get_password_hash
+from app.models.user import User
+from app.models.knowledge import KnowledgePoint
+from app.models.question import Question
+from app.models.knowledge import QuestionKnowledgeMap
+from app.models.paper import Paper, PaperQuestion, Exam
 
 def seed_database():
     """初始化数据库数据"""
