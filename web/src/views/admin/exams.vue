@@ -3,7 +3,10 @@
     <template #header>
       <div class="header-row">
         <h3>考试发布管理</h3>
-        <el-button type="primary" @click="showCreate = true">创建考试</el-button>
+        <div class="header-actions">
+          <el-button type="warning" @click="regenerateDiagnostic">重新生成基线诊断</el-button>
+          <el-button type="primary" @click="showCreate = true">创建考试</el-button>
+        </div>
       </div>
     </template>
 
@@ -22,7 +25,7 @@
       </el-table-column>
     </el-table>
 
-    <el-dialog title="创建考试" :visible.sync="showCreate">
+    <el-dialog title="创建考试" v-model="showCreate">
       <el-form :model="form">
         <el-form-item label="标题"><el-input v-model="form.title" /></el-form-item>
         <el-form-item label="类别">
@@ -45,7 +48,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useAuthStore } from '../../stores/auth'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 
 const authStore = useAuthStore()
 const exams = ref([])
@@ -101,6 +104,28 @@ const archive = async (id) => {
   }
 }
 
+const regenerateDiagnostic = async () => {
+  try {
+    await ElMessageBox.confirm(
+      '确定要重新生成基线诊断试卷吗？这将创建新的诊断考试，原有的诊断考试将被归档。',
+      '重新生成基线诊断',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning',
+      }
+    )
+
+    const res = await authStore.api.post('/admin/exams/diagnostic/regenerate')
+    ElMessage.success('基线诊断试卷重新生成成功')
+    await load()
+  } catch (e) {
+    if (e !== 'cancel') {
+      ElMessage.error(e.response?.data?.detail || '重新生成失败')
+    }
+  }
+}
+
 onMounted(() => {
   load()
 })
@@ -109,6 +134,7 @@ onMounted(() => {
 <style scoped>
 .admin-exams { max-width: 1000px; margin: 20px auto; }
 .header-row { display:flex; justify-content:space-between; align-items:center; }
+.header-actions { display: flex; gap: 10px; }
 </style>
 
 
