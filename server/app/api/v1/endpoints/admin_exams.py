@@ -39,8 +39,8 @@ async def admin_list_exams(
             stmt = stmt.where(Exam.status == status)
 
         # 获取总数
-        count_stmt = select(func.count()).select_from(stmt.subquery())
-        total = db.execute(count_stmt).scalar_one()
+        subq = stmt.order_by(None).with_only_columns(Exam.id).subquery()
+        total = db.execute(select(func.count()).select_from(subq)).scalar_one()
 
         # 获取分页数据
         exams = db.execute(stmt.offset((page - 1) * size).limit(size)).scalars().all()
