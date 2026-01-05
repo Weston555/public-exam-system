@@ -51,25 +51,43 @@
           </el-card>
         </el-col>
       </el-row>
+
+      <!-- 知识点掌握度雷达图 -->
+      <el-row :gutter="20" style="margin-top: 20px;">
+        <el-col :span="24">
+          <el-card>
+            <template #header>
+              <div class="header-row">
+                <h4>知识点掌握度雷达图</h4>
+                <el-text type="info">展示最薄弱的6个知识点掌握情况</el-text>
+              </div>
+            </template>
+            <v-chart :option="radarOption" autoresize style="height:400px" v-if="radarOption"></v-chart>
+            <div v-else>暂无掌握度数据</div>
+          </el-card>
+        </el-col>
+      </el-row>
     </div>
   </el-card>
 </template>
 
 <script setup>
 import { ref, onMounted } from 'vue'
+import { ElMessage } from 'element-plus'
 import { useAuthStore } from '../../stores/auth'
 import { use } from 'echarts/core'
 import VChart from 'vue-echarts'
 import { CanvasRenderer } from 'echarts/renderers'
-import { LineChart, BarChart } from 'echarts/charts'
-import { GridComponent, TooltipComponent, LegendComponent, TitleComponent } from 'echarts/components'
+import { LineChart, BarChart, RadarChart } from 'echarts/charts'
+import { GridComponent, TooltipComponent, LegendComponent, TitleComponent, RadarComponent } from 'echarts/components'
 
-use([CanvasRenderer, LineChart, BarChart, GridComponent, TooltipComponent, LegendComponent, TitleComponent])
+use([CanvasRenderer, LineChart, BarChart, RadarChart, GridComponent, TooltipComponent, LegendComponent, TitleComponent, RadarComponent])
 
 const authStore = useAuthStore()
 const overview = ref({ plan_completion_rate: 0, avg_mastery: 0, wrong_due_count: 0, last_score: null })
 const scoreOption = ref(null)
 const masteryOption = ref(null)
+const radarOption = ref(null)
 
 const loadOverview = async () => {
   try {
@@ -110,10 +128,58 @@ const loadMasteryTop = async () => {
   } catch (e) {}
 }
 
+const loadKnowledgeState = async () => {
+  try {
+    const res = await authStore.api.get('/analytics/student/knowledge-state?limit=6')
+    const items = res.data.items || []
+    if (items.length) {
+      // 雷达图配置
+      radarOption.value = {
+        title: {
+          text: '知识点掌握度雷达图',
+          left: 'center'
+        },
+        tooltip: {
+          trigger: 'item',
+          formatter: function (params) {
+            return `${params.name}: ${params.value}%`
+          }
+        },
+        radar: {
+          indicator: items.map(item => ({
+            name: item.name,
+            max: 100
+          })),
+          center: ['50%', '50%'],
+          radius: '60%'
+        },
+        series: [{
+          name: '掌握度',
+          type: 'radar',
+          data: [{
+            value: items.map(item => item.mastery),
+            name: '掌握度',
+            areaStyle: {
+              opacity: 0.3
+            },
+            lineStyle: {
+              width: 2
+            }
+          }]
+        }]
+      }
+    }
+  } catch (e) {
+    // 接口失败时显示错误提示
+    ElMessage.error('获取知识点掌握度数据失败')
+  }
+}
+
 onMounted(async () => {
   await loadOverview()
   await loadScoreTrend()
   await loadMasteryTop()
+  await loadKnowledgeState()
 })
 </script>
 

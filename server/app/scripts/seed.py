@@ -15,6 +15,7 @@ from app.models.knowledge import KnowledgePoint
 from app.models.question import Question
 from app.models.knowledge import QuestionKnowledgeMap
 from app.models.paper import Paper, PaperQuestion, Exam
+from app.models.progress import UserKnowledgeState
 
 def seed_database():
     """初始化数据库数据"""
@@ -52,7 +53,34 @@ def seed_database():
                     is_active=True
                 )
                 db.add(user)
+                db.flush()  # 获取用户ID
                 print(f"✅ 创建测试学员: {username}/{password}")
+
+                # 为新用户创建示例知识点掌握度数据
+                if db.query(UserKnowledgeState).filter(UserKnowledgeState.user_id == user.id).count() == 0:
+                    knowledge_points = db.query(KnowledgePoint).all()
+                    for kp in knowledge_points:
+                        # 为不同知识点设置不同的掌握度（模拟真实学习情况）
+                        if kp.name == "数量关系":
+                            mastery = 0.4  # 40% - 较薄弱
+                        elif kp.name == "判断推理":
+                            mastery = 0.6  # 60% - 中等
+                        elif kp.name == "阅读理解":
+                            mastery = 0.8  # 80% - 较好
+                        elif kp.name == "行测":
+                            mastery = 0.5  # 50% - 中等
+                        elif kp.name == "申论":
+                            mastery = 0.7  # 70% - 良好
+                        else:
+                            mastery = 0.3  # 30% - 很薄弱
+
+                        user_knowledge_state = UserKnowledgeState(
+                            user_id=user.id,
+                            knowledge_id=kp.id,
+                            mastery=mastery
+                        )
+                        db.add(user_knowledge_state)
+                    print(f"✅ 为用户 {username} 创建知识点掌握度数据")
 
         # 创建知识点树
         if db.query(KnowledgePoint).count() == 0:

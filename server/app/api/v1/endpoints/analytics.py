@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 from typing import List, Optional
@@ -67,10 +68,47 @@ async def student_score_trend(limit: int = Query(10, ge=1, le=100), current_user
 @router.get("/student/mastery-top")
 async def student_mastery_top(limit: int = Query(10, ge=1), current_user: dict = Depends(get_current_student), db: Session = Depends(get_db)):
     uid = current_user["id"]
-    rows = db.query(UserKnowledgeState, KnowledgePoint).join(KnowledgePoint, UserKnowledgeState.knowledge_id == KnowledgePoint.id).filter(UserKnowledgeState.user_id == uid).order_by(UserKnowledgeState.mastery.asc()).limit(limit).all()
+    # 使用 SQLAlchemy 2.0 select 语法
+    stmt = select(UserKnowledgeState, KnowledgePoint).join(KnowledgePoint, UserKnowledgeState.knowledge_id == KnowledgePoint.id).where(UserKnowledgeState.user_id == uid).order_by(UserKnowledgeState.mastery.asc()).limit(limit)
+    rows = db.execute(stmt).all()
     items = []
     for state, kp in rows:
         items.append({"knowledge_id": kp.id, "name": kp.name, "mastery": float(state.mastery)})
+    return {"items": items}
+
+
+@router.get("/student/knowledge-state")
+async def student_knowledge_state(limit: int = Query(6, ge=1, le=20), current_user: dict = Depends(get_current_student), db: Session = Depends(get_db)):
+    """
+    获取学生知识点掌握度雷达图数据
+    返回最薄弱的N个知识点的掌握度（按掌握度升序，取薄弱TOP作为雷达维度）
+    掌握度范围：0-100（百分制，更直观）
+    """
+    uid = current_user["id"]
+
+    # 使用 SQLAlchemy 2.0 select 语法
+    # 为什么取薄弱TOP作为雷达维度：
+    # 1. 雷达图适合展示多维度对比，薄弱知识点更需要关注
+    # 2. 聚焦学生最需要改进的方面，便于针对性学习
+    # 3. TOP N限制避免图表过于复杂
+    stmt = select(UserKnowledgeState, KnowledgePoint).join(
+        KnowledgePoint, UserKnowledgeState.knowledge_id == KnowledgePoint.id
+    ).where(UserKnowledgeState.user_id == uid).order_by(
+        UserKnowledgeState.mastery.asc()
+    ).limit(limit)
+
+    rows = db.execute(stmt).all()
+
+    items = []
+    for state, kp in rows:
+        # 将 0-1 的小数转换为 0-100 的百分制，更直观
+        mastery_percentage = round(float(state.mastery) * 100, 1)
+        items.append({
+            "knowledge_id": kp.id,
+            "name": kp.name,
+            "mastery": mastery_percentage
+        })
+
     return {"items": items}
 
 
