@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 from typing import Optional
 from pydantic import BaseModel
@@ -35,11 +36,11 @@ async def generate_practice(
         mode = (request.mode or "ADAPTIVE").upper()
 
         # 获取符合知识点的题目（不限制难度先）
-        q_ids_query = db.query(Question.id, Question.difficulty).join(
+        stmt = select(Question.id, Question.difficulty).join(
             QuestionKnowledgeMap, Question.id == QuestionKnowledgeMap.question_id
-        ).filter(QuestionKnowledgeMap.knowledge_id == knowledge_id)
+        ).where(QuestionKnowledgeMap.knowledge_id == knowledge_id)
 
-        candidates = q_ids_query.all()
+        candidates = db.execute(stmt).all()
         if not candidates:
             raise HTTPException(status_code=400, detail="所选知识点暂无题目")
 
@@ -64,10 +65,11 @@ async def generate_practice(
             return picked
 
         # Determine user's mastery for this knowledge point (default 0)
-        state = db.query(UserKnowledgeState).filter(
+        state_stmt = select(UserKnowledgeState).where(
             UserKnowledgeState.user_id == current_user["id"],
             UserKnowledgeState.knowledge_id == knowledge_id
-        ).first()
+        )
+        state = db.execute(state_stmt).scalar_one_or_none()
         mastery = float(state.mastery) if state and state.mastery is not None else 0.0
 
         # Map mastery -> target difficulty (explainable rule)
