@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from datetime import date
@@ -150,8 +150,8 @@ async def get_goals(
     goals = db.execute(stmt).scalars().all()
 
     # 获取总数
-    count_stmt = select(Goal).where(Goal.user_id == current_user["id"])
-    total = db.execute(count_stmt).scalars().count()
+    total_stmt = select(func.count()).select_from(Goal).where(Goal.user_id == current_user["id"])
+    total = db.execute(total_stmt).scalar_one()
 
     return {
         "items": [

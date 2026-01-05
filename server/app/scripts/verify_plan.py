@@ -104,7 +104,8 @@ def main():
             date_count = len(items_by_date)
             total_tasks = sum(len(tasks) for tasks in items_by_date.values())
 
-            print("✅ 活跃计划获取成功:"            print(f"   计划ID: {active_plan['plan_id']}")
+            print("✅ 活跃计划获取成功:")
+            print(f"   计划ID: {active_plan['plan_id']}")
             print(f"   时间范围: {active_plan['start_date']} 至 {active_plan['end_date']}")
             print(f"   日期数量: {date_count}")
             print(f"   总任务数: {total_tasks}")

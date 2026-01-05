@@ -22,27 +22,31 @@ async def student_overview(
 ):
     try:
         uid = current_user["id"]
+
         # plan completion rate (active plan)
-        plan = db.query(LearningPlan).filter(LearningPlan.user_id == uid, LearningPlan.is_active == True).first()
+        plan_stmt = select(LearningPlan).where(LearningPlan.user_id == uid, LearningPlan.is_active == True)
+        plan = db.execute(plan_stmt).scalar_one_or_none()
         plan_completion_rate = 0.0
         if plan:
-            total = db.query(PlanItem).filter(PlanItem.plan_id == plan.id).count()
-            done = db.query(PlanItem).filter(PlanItem.plan_id == plan.id, PlanItem.status == "DONE").count()
+            total_stmt = select(func.count()).select_from(PlanItem).where(PlanItem.plan_id == plan.id)
+            total = db.execute(total_stmt).scalar_one()
+            done_stmt = select(func.count()).select_from(PlanItem).where(PlanItem.plan_id == plan.id, PlanItem.status == "DONE")
+            done = db.execute(done_stmt).scalar_one()
             plan_completion_rate = round((done / total) * 100, 2) if total > 0 else 0.0
 
         # avg mastery
-        avg_mastery = db.query(UserKnowledgeState).filter(UserKnowledgeState.user_id == uid).with_entities(
-            UserKnowledgeState.mastery).all()
-        avg_mastery_val = 0.0
-        if avg_mastery:
-            avg_mastery_val = round(sum([float(x[0]) for x in avg_mastery]) / len(avg_mastery), 2)
+        avg_stmt = select(func.avg(UserKnowledgeState.mastery)).where(UserKnowledgeState.user_id == uid)
+        avg_mastery_val = db.execute(avg_stmt).scalar_one() or 0.0
+        avg_mastery_val = round(float(avg_mastery_val), 2)
 
         # wrong due count
         now = datetime.utcnow()
-        wrong_due_count = db.query(WrongQuestion).filter(WrongQuestion.user_id == uid, WrongQuestion.next_review_at <= now).count()
+        wrong_stmt = select(func.count()).select_from(WrongQuestion).where(WrongQuestion.user_id == uid, WrongQuestion.next_review_at <= now)
+        wrong_due_count = db.execute(wrong_stmt).scalar_one()
 
         # last score
-        last_attempt = db.query(Attempt).filter(Attempt.user_id == uid, Attempt.status == "SUBMITTED").order_by(Attempt.submitted_at.desc()).first()
+        last_stmt = select(Attempt).where(Attempt.user_id == uid, Attempt.status == "SUBMITTED").order_by(Attempt.submitted_at.desc()).limit(1)
+        last_attempt = db.execute(last_stmt).scalar_one_or_none()
         last_score = float(last_attempt.total_score) if last_attempt and last_attempt.total_score is not None else None
 
         return {
@@ -58,7 +62,8 @@ async def student_overview(
 @router.get("/student/score-trend")
 async def student_score_trend(limit: int = Query(10, ge=1, le=100), current_user: dict = Depends(get_current_student), db: Session = Depends(get_db)):
     uid = current_user["id"]
-    tries = db.query(Attempt).filter(Attempt.user_id == uid, Attempt.status == "SUBMITTED").order_by(Attempt.submitted_at.desc()).limit(limit).all()
+    stmt = select(Attempt).where(Attempt.user_id == uid, Attempt.status == "SUBMITTED").order_by(Attempt.submitted_at.desc()).limit(limit)
+    tries = db.execute(stmt).scalars().all()
     items = []
     for a in reversed(tries):
         items.append({"submitted_at": a.submitted_at.isoformat() if a.submitted_at else None, "total_score": float(a.total_score) if a.total_score is not None else None})
@@ -115,25 +120,40 @@ async def student_knowledge_state(limit: int = Query(6, ge=1, le=20), current_us
 @router.get("/admin/overview")
 async def admin_overview(current_user: dict = Depends(get_current_admin), db: Session = Depends(get_db)):
     try:
-        total_users = db.query(User).count()
+        # total users
+        total_users_stmt = select(func.count()).select_from(User)
+        total_users = db.execute(total_users_stmt).scalar_one()
+
         # active users: users with attempts in last 7 days
         since = datetime.utcnow() - timedelta(days=7)
-        active_users = db.query(Attempt.user_id).filter(Attempt.submitted_at >= since).distinct().count()
+        active_users_stmt = select(func.count(func.distinct(Attempt.user_id))).select_from(Attempt).where(Attempt.submitted_at >= since)
+        active_users = db.execute(active_users_stmt).scalar_one()
+
         # avg completion rate (approx): average of users' active plan completion
-        user_ids = [u.id for u in db.query(User).all()]
+        user_stmt = select(User.id)
+        user_ids = db.execute(user_stmt).scalars().all()
         rates = []
         for uid in user_ids:
-            plan = db.query(LearningPlan).filter(LearningPlan.user_id == uid, LearningPlan.is_active == True).first()
+            plan_stmt = select(LearningPlan).where(LearningPlan.user_id == uid, LearningPlan.is_active == True)
+            plan = db.execute(plan_stmt).scalar_one_or_none()
             if plan:
-                total = db.query(PlanItem).filter(PlanItem.plan_id == plan.id).count()
-                done = db.query(PlanItem).filter(PlanItem.plan_id == plan.id, PlanItem.status == "DONE").count()
+                total_stmt = select(func.count()).select_from(PlanItem).where(PlanItem.plan_id == plan.id)
+                total = db.execute(total_stmt).scalar_one()
+                done_stmt = select(func.count()).select_from(PlanItem).where(PlanItem.plan_id == plan.id, PlanItem.status == "DONE")
+                done = db.execute(done_stmt).scalar_one()
                 if total > 0:
                     rates.append(done / total)
         avg_completion = round((sum(rates) / len(rates)) * 100, 2) if rates else 0.0
+
         # avg score recent
-        recent_attempts = db.query(Attempt).filter(Attempt.status == "SUBMITTED", Attempt.submitted_at >= since).all()
+        recent_stmt = select(Attempt).where(Attempt.status == "SUBMITTED", Attempt.submitted_at >= since)
+        recent_attempts = db.execute(recent_stmt).scalars().all()
         avg_score = round(sum([float(a.total_score or 0) for a in recent_attempts]) / len(recent_attempts), 2) if recent_attempts else 0.0
-        wrong_due_total = db.query(WrongQuestion).filter(WrongQuestion.next_review_at <= datetime.utcnow()).count()
+
+        # wrong due total
+        wrong_stmt = select(func.count()).select_from(WrongQuestion).where(WrongQuestion.next_review_at <= datetime.utcnow())
+        wrong_due_total = db.execute(wrong_stmt).scalar_one()
+
         return {"total_users": total_users, "active_users": active_users, "avg_completion_rate": avg_completion, "avg_score": avg_score, "wrong_due_total": wrong_due_total}
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
