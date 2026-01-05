@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from typing import List, Union
+from typing import List, Union, Optional
 from pydantic import BaseModel
 from datetime import datetime, timedelta
 import re
@@ -431,6 +431,37 @@ async def get_attempt_result(
     }
 
 
+@router.get("/history")
+async def get_attempts_history(
+    category: Optional[str] = None,
+    limit: int = 20,
+    current_user: dict = Depends(get_current_student),
+    db: Session = Depends(get_db)
+):
+    """获取当前用户的作答历史（可按考试类别过滤）"""
+    try:
+        query = db.query(Attempt).filter(Attempt.user_id == current_user["id"], Attempt.status == "SUBMITTED")
+        if category:
+            # join Exam
+            from ....models.paper import Exam as ExamModel
+            query = query.join(ExamModel, Attempt.exam_id == ExamModel.id).filter(ExamModel.category == category)
+
+        attempts = query.order_by(Attempt.submitted_at.desc()).limit(limit).all()
+        items = []
+        for a in attempts:
+            items.append({
+                "attempt_id": a.id,
+                "exam_id": a.exam_id,
+                "exam_title": a.exam.title if a.exam else None,
+                "total_score": float(a.total_score) if a.total_score is not None else None,
+                "submitted_at": a.submitted_at.isoformat() if a.submitted_at else None,
+                "duration_minutes": a.exam.duration_minutes if a.exam else None
+            })
+        return {"items": items}
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
 @router.get("/{attempt_id}")
 async def get_attempt_detail(
     attempt_id: int,
@@ -462,28 +493,28 @@ async def get_attempt_detail(
     questions = []
     if exam and exam.paper_id:
         # query PaperQuestion model to build list
-    from ....models.paper import PaperQuestion
-    pqs = db.query(PaperQuestion).filter(PaperQuestion.paper_id == exam.paper_id).order_by(PaperQuestion.order_no).all()
+        from ....models.paper import PaperQuestion
+        pqs = db.query(PaperQuestion).filter(PaperQuestion.paper_id == exam.paper_id).order_by(PaperQuestion.order_no).all()
 
-    for pq in pqs:
-        q = db.query(Question).filter(Question.id == pq.question_id).first()
-        if not q:
-            continue
-        # find saved answer if any
-        ans = db.query(Answer).filter(Answer.attempt_id == attempt_id, Answer.question_id == q.id).first()
-        saved = ans.answer_json if ans and ans.answer_json is not None else None
+        for pq in pqs:
+            q = db.query(Question).filter(Question.id == pq.question_id).first()
+            if not q:
+                continue
+            # find saved answer if any
+            ans = db.query(Answer).filter(Answer.attempt_id == attempt_id, Answer.question_id == q.id).first()
+            saved = ans.answer_json if ans and ans.answer_json is not None else None
 
-        questions.append({
-            "id": q.id,
-            "order_no": pq.order_no,
-            "question": {
+            questions.append({
                 "id": q.id,
-                "type": q.type,
-                "stem": q.stem,
-                "options_json": q.options_json
-            },
-            "saved_answer": saved
-        })
+                "order_no": pq.order_no,
+                "question": {
+                    "id": q.id,
+                    "type": q.type,
+                    "stem": q.stem,
+                    "options_json": q.options_json
+                },
+                "saved_answer": saved
+            })
 
     return {
         "attempt_id": attempt.id,
@@ -492,34 +523,3 @@ async def get_attempt_detail(
         "exam": exam_info,
         "questions": questions
     }
-
-
-@router.get("/history")
-async def get_attempts_history(
-    category: Optional[str] = None,
-    limit: int = 20,
-    current_user: dict = Depends(get_current_student),
-    db: Session = Depends(get_db)
-):
-    """获取当前用户的作答历史（可按考试类别过滤）"""
-    try:
-        query = db.query(Attempt).filter(Attempt.user_id == current_user["id"], Attempt.status == "SUBMITTED")
-        if category:
-            # join Exam
-            from ....models.paper import Exam as ExamModel
-            query = query.join(ExamModel, Attempt.exam_id == ExamModel.id).filter(ExamModel.category == category)
-
-        attempts = query.order_by(Attempt.submitted_at.desc()).limit(limit).all()
-        items = []
-        for a in attempts:
-            items.append({
-                "attempt_id": a.id,
-                "exam_id": a.exam_id,
-                "exam_title": a.exam.title if a.exam else None,
-                "total_score": float(a.total_score) if a.total_score is not None else None,
-                "submitted_at": a.submitted_at.isoformat() if a.submitted_at else None,
-                "duration_minutes": a.exam.duration_minutes if a.exam else None
-            })
-        return {"items": items}
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
