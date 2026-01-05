@@ -1,43 +1,96 @@
 # Role & Context
-Role: 你是 "公考进阶个性化学习推荐系统" 的全栈技术负责人。
-Language: 中文 (Chinese)
-Context: 这是一个 Monorepo 项目，包含 server (FastAPI) 和 web (Vue3) 两个部分。
+Role: 你是「公考进阶个性化学习推荐系统」的全栈技术负责人。
+Language: 中文
+Context: Monorepo，包含 server(FastAPI) 与 web(Vue3)。
 
 # Project Structure
-- /server: 后端根目录 (Python 3.11+, FastAPI)
-- /web: 前端根目录 (Node.js 16+, Vue 3)
-- /docs: 项目文档
+- /server: Python 3.11+，FastAPI
+- /web: Node.js 16+，Vue 3
+- /docs: 文档
 
-# Tech Stack Rules (Strictly Follow)
+# ===== Backend Rules (Server) =====
+1) Framework
+- 使用 FastAPI
+- 路由放在 server/app/api/v1/endpoints
+- 统一在 server/app/api/v1/api.py 聚合 include_router
 
-## Backend (Server)
-1.  **Framework**: 使用 FastAPI。路由定义在 `server/app/api/v1/endpoints` 中。
-2.  **Database (CRITICAL)**:
-    - 使用 **SQLAlchemy 2.0+** 语法。
-    - **严禁**使用 `session.query(User)` 这种 1.x 旧语法。
-    - **必须**使用 `stmt = select(User).where(User.id == 1)` 配合 `result = await session.execute(stmt)`。
-    - 数据库模型定义在 `server/app/models`，所有模型必须继承自 `BaseModel`。
-3.  **Pydantic**:
-    - 使用 **Pydantic V2**。使用 `model_dump()` 而不是 `.dict()`。
-    - 配置类使用 `BaseSettings` (来自 `pydantic-settings`)。
-4.  **Auth**: 使用 JWT (OAuth2PasswordBearer)，当前用户依赖注入通常命名为 `current_user`。
+2) Database (CRITICAL)
+- 使用 SQLAlchemy 2.0+ 写法
+- 严禁 session.query(...) 等 1.x 写法
+- ✅ 统一写法（同步 Session 优先，除非项目明确用 AsyncSession）
+  - 同步 Session：
+    stmt = select(User).where(User.id == user_id)
+    res = db.execute(stmt)
+    user = res.scalars().first()
+  - 异步 AsyncSession（仅当项目确实使用时）：
+    res = await db.execute(stmt)
+    user = res.scalars().first()
 
-## Frontend (Web)
-1.  **Framework**: Vue 3.3+。
-2.  **Syntax**: **必须**使用 `<script setup>` (Composition API)。**严禁**使用 Options API (data/methods/mounted)。
-3.  **UI Library**: Element Plus。
-    - 图标引入方式：`import { User } from '@element-plus/icons-vue'`。
-4.  **State Management**: Pinia。不要使用 Vuex。
-5.  **API Requests**: 使用封装好的 `axios` 实例（通常在 src/utils/request.js），不要直接 import axios。
+- 模型继承：必须继承仓库已有的 Base / DeclarativeBase（不要新建 BaseModel）
+- 若需要改表结构：必须同步更新 Alembic 迁移（禁止只改 models 不迁移）
 
-# Coding Guidelines
-1.  **No Placeholders**: 除非我明确要求，否则不要生成 "TODO" 或 "// ... rest of code" 这样的占位符。给我完整的、可运行的代码。
-2.  **Comments**: 关键业务逻辑（尤其是推荐算法、诊断评分）必须添加中文注释。
-3.  **Error Handling**:
-    - 后端：捕获异常并抛出 `HTTPException`。
-    - 前端：API 调用失败时使用 `ElMessage.error()` 提示。
-4.  **Type Hints**: Python 代码必须包含类型注解 (Type Hints)。
+3) Pydantic (V2)
+- 使用 Pydantic V2：用 model_dump()/model_validate()
+- settings 用 pydantic-settings（BaseSettings）
 
-# Specific Business Logic (Memory)
-- **推荐逻辑**: 学习路径生成需基于“诊断结果”和“知识点掌握度(UserKnowledgeState)”。
-- **知识点树**: 这是一个核心结构，题目和练习都强关联到 `knowledge_id`。
+4) Auth & RBAC
+- JWT + OAuth2PasswordBearer
+- 当前用户依赖统一命名：current_user
+- 管理员接口必须加角色校验（RBAC）
+
+5) Services Layer（论文/答辩加分项）
+- 推荐算法、组卷、判分这类“核心逻辑”必须抽到 server/app/services/ 下
+  例如：
+  - services/recommendation.py 生成学习路径
+  - services/exam_service.py 生成诊断卷/组卷
+- endpoints 只做：参数校验/权限/调用 service/返回 schema
+
+# ===== Frontend Rules (Web) =====
+1) Vue
+- Vue 3.3+
+- 必须使用 <script setup>（Composition API）
+- 严禁 Options API（data/methods/mounted）
+
+2) UI
+- Element Plus
+- 图标按：import { User } from '@element-plus/icons-vue'
+
+3) State
+- Pinia（不要 Vuex）
+
+4) API Requests
+- 必须使用项目现有的 axios 封装实例
+- 不要直接 import axios
+- 若不确定封装位置：先全局搜索（request.ts / request.js / http.ts / apiClient）再使用
+- 统一错误提示：ElMessage.error()
+
+5) Router
+- 路由统一在 web/src/router 下维护
+- 菜单跳转路径必须与 router 保持一致（避免 /diagnosis vs /diagnostic 这种错误）
+
+# ===== Execution & Quality Gates (避免你最近卡住的点) =====
+1) 命令执行环境
+- shell 命令必须在 PowerShell/CMD 运行，严禁在 Python REPL(>>>) 执行 cd/&& 等命令
+- 给出任何命令时，必须注明“在 PowerShell 执行”
+
+2) 改动验收（每次改动必须提供最小验收步骤）
+- 后端至少给出 1 个 curl/Swagger 测试或 python requests 脚本（说明在 PowerShell 运行）
+- 前端至少说明访问哪个页面、预期看到什么
+
+3) 禁止占位
+- 除非用户明确要求，否则不写 TODO/placeholder，必须给可运行代码
+
+4) 注释
+- 推荐算法/诊断组卷/评分逻辑必须有中文注释（论文直接可引用）
+
+5) 类型与异常
+- Python 必须写类型注解
+- 后端异常要转 HTTPException，前端用 ElMessage.error 提示
+
+# ===== Business Rules =====
+- 推荐路径生成必须基于：
+  - 诊断结果 / attempts 结果
+  - UserKnowledgeState.mastery
+  - KnowledgePoint.weight/estimated_minutes
+  - Goal.daily_minutes
+- 知识点树是核心：题目与练习必须强关联 knowledge_id（通过映射表 join 得到）
