@@ -89,8 +89,8 @@ const startPractice = async () => {
     const examId = res.data.exam_id
     // 启动考试，复用 /exams/{id}/start
     const start = await authStore.api.post(`/exams/${examId}/start`)
-    localStorage.setItem('current_attempt', JSON.stringify(start.data))
-    router.push({ path: '/exam', query: { attempt_id: start.data.attempt_id } })
+    const attemptId = start.data.attempt_id
+    window.location.href = `/exam?attempt_id=${attemptId}`
   } catch (e) {
     ElMessage.error(e.response?.data?.detail || '生成练习失败')
   } finally {

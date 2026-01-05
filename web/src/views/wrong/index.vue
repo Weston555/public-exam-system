@@ -58,8 +58,8 @@ const generateReview = async () => {
     const res = await authStore.api.post('/wrong-questions/review/generate', { count: 10 })
     const examId = res.data.exam_id
     const startRes = await authStore.api.post(`/exams/${examId}/start`)
-    localStorage.setItem('current_attempt', JSON.stringify(startRes.data))
-    router.push({ path: '/exam', query: { attempt_id: startRes.data.attempt_id } })
+    const attemptId = startRes.data.attempt_id
+    window.location.href = `/exam?attempt_id=${attemptId}`
   } catch (e) {
     ElMessage.error(e.response?.data?.detail || '生成复习失败')
   } finally {
