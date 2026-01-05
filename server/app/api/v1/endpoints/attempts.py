@@ -153,15 +153,17 @@ async def submit_attempt(
         knowledge_updates = {}
 
         for answer in answers:
-            question = db.query(Question).filter(Question.id == answer.question_id).first()
+            question_stmt = select(Question).where(Question.id == answer.question_id)
+            question = db.execute(question_stmt).scalar_one_or_none()
             if not question:
                 continue
 
             # 获取题目分数（从PaperQuestion读取）
-            paper_question = db.query(PaperQuestion).filter(
+            paper_question_stmt = select(PaperQuestion).where(
                 PaperQuestion.paper_id == attempt.exam.paper_id,
                 PaperQuestion.question_id == question.id
-            ).first()
+            )
+            paper_question = db.execute(paper_question_stmt).scalar_one_or_none()
             question_score = float(paper_question.score) if paper_question else 2.0
 
             # 按题型进行判分
@@ -308,10 +310,11 @@ async def submit_attempt(
         # 更新错题本
         for wrong_data in wrong_questions_data:
             # 检查是否已存在错题记录
-            existing_wrong = db.query(WrongQuestion).filter(
+            existing_wrong_stmt = select(WrongQuestion).where(
                 WrongQuestion.user_id == current_user["id"],
                 WrongQuestion.question_id == wrong_data["question_id"]
-            ).first()
+            )
+            existing_wrong = db.execute(existing_wrong_stmt).scalar_one_or_none()
 
             # 计算下次复习时间（简单遗忘曲线）
             def calculate_next_review(wrong_count: int) -> datetime:
@@ -341,10 +344,11 @@ async def submit_attempt(
             new_mastery = stats["correct"] / stats["total"] if stats["total"] > 0 else 0.0
 
             # 查找或创建知识点掌握状态
-            existing_state = db.query(UserKnowledgeState).filter(
+            existing_state_stmt = select(UserKnowledgeState).where(
                 UserKnowledgeState.user_id == current_user["id"],
                 UserKnowledgeState.knowledge_id == knowledge_id
-            ).first()
+            )
+            existing_state = db.execute(existing_state_stmt).scalar_one_or_none()
 
             if existing_state:
                 # 使用指数移动平均更新掌握度
@@ -391,10 +395,11 @@ async def get_attempt_result(
     db: Session = Depends(get_db)
 ):
     """获取考试结果"""
-    attempt = db.query(Attempt).filter(
+    attempt_stmt = select(Attempt).where(
         Attempt.id == attempt_id,
         Attempt.user_id == current_user["id"]
-    ).first()
+    )
+    attempt = db.execute(attempt_stmt).scalar_one_or_none()
 
     if not attempt:
         raise HTTPException(
@@ -409,11 +414,13 @@ async def get_attempt_result(
         )
 
     # 获取答案详情
-    answers = db.query(Answer).filter(Answer.attempt_id == attempt_id).all()
+    answers_stmt = select(Answer).where(Answer.attempt_id == attempt_id)
+    answers = db.execute(answers_stmt).scalars().all()
     results = []
 
     for answer in answers:
-        question = db.query(Question).filter(Question.id == answer.question_id).first()
+        question_stmt = select(Question).where(Question.id == answer.question_id)
+        question = db.execute(question_stmt).scalar_one_or_none()
         if question:
             results.append({
                 "question_id": question.id,
@@ -444,13 +451,14 @@ async def get_attempts_history(
 ):
     """获取当前用户的作答历史（可按考试类别过滤）"""
     try:
-        query = db.query(Attempt).filter(Attempt.user_id == current_user["id"], Attempt.status == "SUBMITTED")
+        stmt = select(Attempt).where(Attempt.user_id == current_user["id"], Attempt.status == "SUBMITTED")
         if category:
             # join Exam
             from ....models.paper import Exam as ExamModel
-            query = query.join(ExamModel, Attempt.exam_id == ExamModel.id).filter(ExamModel.category == category)
+            stmt = stmt.join(ExamModel, Attempt.exam_id == ExamModel.id).where(ExamModel.category == category)
 
-        attempts = query.order_by(Attempt.submitted_at.desc()).limit(limit).all()
+        stmt = stmt.order_by(Attempt.submitted_at.desc()).limit(limit)
+        attempts = db.execute(stmt).scalars().all()
         items = []
         for a in attempts:
             items.append({
@@ -473,10 +481,11 @@ async def get_attempt_detail(
     db: Session = Depends(get_db)
 ):
     """获取 attempt 详情（用于答题页面恢复）"""
-    attempt = db.query(Attempt).filter(
+    attempt_stmt = select(Attempt).where(
         Attempt.id == attempt_id,
         Attempt.user_id == current_user["id"]
-    ).first()
+    )
+    attempt = db.execute(attempt_stmt).scalar_one_or_none()
 
     if not attempt:
         raise HTTPException(
@@ -498,14 +507,17 @@ async def get_attempt_detail(
     if exam and exam.paper_id:
         # query PaperQuestion model to build list
         from ....models.paper import PaperQuestion
-        pqs = db.query(PaperQuestion).filter(PaperQuestion.paper_id == exam.paper_id).order_by(PaperQuestion.order_no).all()
+        pqs_stmt = select(PaperQuestion).where(PaperQuestion.paper_id == exam.paper_id).order_by(PaperQuestion.order_no)
+        pqs = db.execute(pqs_stmt).scalars().all()
 
         for pq in pqs:
-            q = db.query(Question).filter(Question.id == pq.question_id).first()
+            q_stmt = select(Question).where(Question.id == pq.question_id)
+            q = db.execute(q_stmt).scalar_one_or_none()
             if not q:
                 continue
             # find saved answer if any
-            ans = db.query(Answer).filter(Answer.attempt_id == attempt_id, Answer.question_id == q.id).first()
+            ans_stmt = select(Answer).where(Answer.attempt_id == attempt_id, Answer.question_id == q.id)
+            ans = db.execute(ans_stmt).scalar_one_or_none()
             saved = ans.answer_json if ans and ans.answer_json is not None else None
 
             questions.append({

@@ -38,6 +38,7 @@ def generate_diagnostic_exam(
     # 2. 为每个一级知识点收集题目，避免重复
     selected_questions = []
     selected_question_ids = set()  # 记录已选题目ID，避免重复
+    duplicates_removed = 0  # 记录去重移除的题目数量
     kp_stats = []  # 记录每个知识点的抽题统计
 
     for kp in top_level_kps:
@@ -49,13 +50,17 @@ def generate_diagnostic_exam(
 
         # 过滤掉已被其他知识点选中的题目
         available_questions = [q for q in questions if q.id not in selected_question_ids]
+        filtered_count = len(questions) - len(available_questions)
+        duplicates_removed += filtered_count
 
         # 随机抽取指定数量的题目
         selected = _random_sample_questions(available_questions, per_top_kp)
 
         # 记录选中的题目ID
+        selected_ids_for_kp = []
         for q in selected:
             selected_question_ids.add(q.id)
+            selected_ids_for_kp.append(q.id)
 
         selected_questions.extend(selected)
 
@@ -64,8 +69,10 @@ def generate_diagnostic_exam(
             "knowledge_point_id": kp.id,
             "knowledge_point_name": kp.name,
             "total_available": len(questions),
+            "filtered_duplicates": filtered_count,
+            "available_after_filter": len(available_questions),
             "selected_count": len(selected),
-            "available_after_filter": len(available_questions)
+            "selected_question_ids": selected_ids_for_kp
         })
 
     if not selected_questions:
@@ -80,6 +87,8 @@ def generate_diagnostic_exam(
         "top_level_kp_count": len(top_level_kps),
         "knowledge_points": kp_stats,
         "total_questions": len(selected_questions),
+        "unique_questions": len(selected_questions),  # 去重后的题目数量
+        "duplicates_removed": duplicates_removed,  # 本次去重移除的数量
         "total_score": len(selected_questions) * 2.0,
         "generated_at": datetime.now().isoformat(),
         "algorithm_description": "智能诊断试卷生成：基于知识点树结构，按一级知识点分类抽题，确保知识点覆盖全面且题目不重复"

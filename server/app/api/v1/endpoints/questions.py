@@ -45,24 +45,24 @@ async def get_questions(
 ):
     """获取题目列表"""
     try:
-        query = db.query(Question)
+        stmt = select(Question)
 
         # 应用过滤条件
         if knowledge_id:
             # 查找与指定知识点关联的题目
-            subquery = db.query(QuestionKnowledgeMap.question_id).filter(
+            subquery = select(QuestionKnowledgeMap.question_id).where(
                 QuestionKnowledgeMap.knowledge_id == knowledge_id
             )
-            query = query.filter(Question.id.in_(subquery))
+            stmt = stmt.where(Question.id.in_(subquery))
 
         if type:
-            query = query.filter(Question.type == type)
+            stmt = stmt.where(Question.type == type)
 
         if difficulty:
-            query = query.filter(Question.difficulty == difficulty)
+            stmt = stmt.where(Question.difficulty == difficulty)
 
         if search:
-            query = query.filter(
+            stmt = stmt.where(
                 or_(
                     Question.stem.contains(search),
                     Question.analysis.contains(search)
@@ -70,8 +70,10 @@ async def get_questions(
             )
 
         # 分页
-        total = query.count()
-        questions = query.offset((page - 1) * size).limit(size).all()
+        count_stmt = select(func.count()).select_from(stmt.subquery())
+        total = db.execute(count_stmt).scalar_one()
+        stmt = stmt.offset((page - 1) * size).limit(size)
+        questions = db.execute(stmt).scalars().all()
 
         # 为每个题目添加知识点信息
         result = []
