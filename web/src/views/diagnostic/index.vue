@@ -254,10 +254,12 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useAuthStore } from '../../stores/auth'
 
 const authStore = useAuthStore()
+const router = useRouter()
 
 const loading = ref(false)
 const submitting = ref(false)
@@ -327,6 +329,23 @@ const startDiagnostic = async () => {
   try {
     loading.value = true
 
+    // 检查是否已设置学习目标
+    const goalResponse = await authStore.api.get('/goals/me')
+    if (!goalResponse.data) {
+      await ElMessageBox.confirm(
+        '开始诊断前需要先设置学习目标，这样系统才能为您制定合适的诊断内容。',
+        '需要设置学习目标',
+        {
+          confirmButtonText: '去设置',
+          cancelButtonText: '取消',
+          type: 'warning',
+        }
+      )
+      // 跳转到目标设置页面
+      await router.push('/goal')
+      return
+    }
+
     // 获取诊断考试列表
     const examResponse = await authStore.api.get('/exams?category=DIAGNOSTIC')
     const exams = examResponse.data.items
@@ -347,6 +366,9 @@ const startDiagnostic = async () => {
 
     ElMessage.success('诊断考试开始，请认真作答')
   } catch (error) {
+    if (error === 'cancel') {
+      return // 用户取消
+    }
     console.error('开始诊断失败:', error)
     ElMessage.error(error.response?.data?.detail || '开始诊断失败，请重试')
   } finally {

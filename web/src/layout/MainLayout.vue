@@ -18,6 +18,10 @@
             <el-icon><HomeFilled /></el-icon>
             <span>首页概览</span>
           </el-menu-item>
+          <el-menu-item index="/goal">
+            <el-icon><Aim /></el-icon>
+            <span>学习目标</span>
+          </el-menu-item>
           <el-menu-item index="/plan">
             <el-icon><Guide /></el-icon>
             <span>学习路径推荐</span>

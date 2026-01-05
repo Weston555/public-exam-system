@@ -24,6 +24,12 @@ const router = createRouter({
           meta: { title: '学习路径', requiresAuth: true, role: 'student' }
         },
         {
+          path: 'goal',
+          name: 'Goal',
+          component: () => import('../views/goal/index.vue'),
+          meta: { title: '学习目标', requiresAuth: true, role: 'student' }
+        },
+        {
           path: 'diagnostic',
           name: 'Diagnostic',
           component: () => import('../views/diagnostic/index.vue'),

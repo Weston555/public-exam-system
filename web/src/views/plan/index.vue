@@ -206,10 +206,12 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useAuthStore } from '../../stores/auth'
 
 const authStore = useAuthStore()
+const router = useRouter()
 
 const loading = ref(true)
 const generating = ref(false)
@@ -330,11 +332,31 @@ const loadActivePlan = async () => {
 
 const generatePlan = async () => {
   try {
+    // 在生成计划前检查是否已设置学习目标
+    const goalResponse = await authStore.api.get('/goals/me')
+    if (!goalResponse.data) {
+      await ElMessageBox.confirm(
+        '您还没有设置学习目标，请先设置学习目标后再生成计划。',
+        '需要设置学习目标',
+        {
+          confirmButtonText: '去设置',
+          cancelButtonText: '取消',
+          type: 'warning',
+        }
+      )
+      // 跳转到目标设置页面
+      await router.push('/goal')
+      return
+    }
+
     generating.value = true
     const response = await authStore.api.post('/plans/generate', { days: 14 })
     ElMessage.success(response.data.message)
     await loadActivePlan()
   } catch (error) {
+    if (error === 'cancel') {
+      return // 用户取消
+    }
     ElMessage.error(error.response?.data?.detail || '生成学习计划失败')
   } finally {
     generating.value = false
