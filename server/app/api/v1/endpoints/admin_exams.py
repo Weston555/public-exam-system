@@ -8,6 +8,7 @@ from datetime import datetime
 from ....core.database import get_db
 from ....models.paper import Exam, Paper, PaperQuestion, Question
 from ....models.question import QuestionKnowledgeMap
+from ....services.diagnostic_generator import generate_diagnostic_exam
 from ..deps import get_current_admin
 
 router = APIRouter()
@@ -119,62 +120,22 @@ async def admin_regenerate_diagnostic_exam(
 ):
     """重新生成基线诊断考试"""
     try:
-        # 1. 将现有的DIAGNOSTIC考试状态改为ARCHIVED
-        stmt = select(Exam).where(Exam.category == "DIAGNOSTIC", Exam.status != "ARCHIVED")
-        existing_exams = db.execute(stmt).scalars().all()
-
-        for exam in existing_exams:
-            exam.status = "ARCHIVED"
-            exam.title = f"{exam.title} (已归档 {datetime.now().strftime('%Y-%m-%d %H:%M')})"
-
-        # 2. 创建新的诊断试卷
-        # 获取所有问题（通常是基线诊断用的题目）
-        questions_stmt = select(Question)
-        questions = db.execute(questions_stmt).scalars().all()
-
-        if not questions:
-            raise HTTPException(status_code=400, detail="没有可用的题目，无法生成诊断试卷")
-
-        # 创建试卷
-        paper_title = f"基线诊断试卷 (重新生成 {datetime.now().strftime('%Y-%m-%d %H:%M')})"
-        paper = Paper(
-            title=paper_title,
-            mode="AUTO",
-            total_score=float(len(questions) * 2.0),
-            created_by=current_user["id"]
+        # 使用诊断生成服务生成考试
+        exam = generate_diagnostic_exam(
+            db=db,
+            created_by=current_user["id"],
+            per_top_kp=2,  # 每个一级知识点抽2道题
+            max_difficulty=2  # 最大难度为2
         )
-        db.add(paper)
-        db.flush()
-
-        # 添加题目到试卷
-        for i, question in enumerate(questions):
-            paper_question = PaperQuestion(
-                paper_id=paper.id,
-                question_id=question.id,
-                order_no=i + 1,
-                score=2.0
-            )
-            db.add(paper_question)
-
-        # 3. 创建新的诊断考试
-        exam = Exam(
-            paper_id=paper.id,
-            title=f"基线诊断考试 (重新生成 {datetime.now().strftime('%Y-%m-%d %H:%M')})",
-            category="DIAGNOSTIC",
-            duration_minutes=30,
-            status="PUBLISHED",
-            created_by=current_user["id"]
-        )
-        db.add(exam)
 
         db.commit()
         db.refresh(exam)
 
         return {
-            "id": exam.id,
-            "message": "基线诊断考试重新生成成功",
+            "exam_id": exam.id,
+            "paper_id": exam.paper_id,
             "title": exam.title,
-            "paper_id": paper.id
+            "message": "基线诊断考试重新生成成功"
         }
 
     except Exception as e:

@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+from sqlalchemy import select, desc, func
 from sqlalchemy.orm import Session
 from typing import Optional
 from datetime import datetime
@@ -21,22 +22,26 @@ async def get_exams(
 ):
     """获取考试列表"""
     try:
-        query = db.query(Exam).filter(Exam.status == "PUBLISHED")
+        stmt = select(Exam).where(Exam.status == "PUBLISHED")
 
         if category:
-            query = query.filter(Exam.category == category)
+            stmt = stmt.where(Exam.category == category)
 
         # 按创建时间倒序
-        from sqlalchemy import desc
-        query = query.order_by(desc(Exam.created_at))
+        stmt = stmt.order_by(desc(Exam.created_at))
 
-        # 分页
-        total = query.count()
-        exams = query.offset((page - 1) * size).limit(size).all()
+        # 获取总数
+        count_stmt = stmt.with_only_columns(Exam.id)
+        total = db.execute(count_stmt).scalars().count()
+
+        # 分页获取数据
+        exams = db.execute(stmt.offset((page - 1) * size).limit(size)).scalars().all()
 
         result = []
         for exam in exams:
-            total_questions = len(exam.paper.paper_questions) if exam.paper else 0
+            # 获取题目数量
+            questions_stmt = select(func.count()).select_from(PaperQuestion).where(PaperQuestion.paper_id == exam.paper_id)
+            total_questions = db.execute(questions_stmt).scalar_one()
             result.append({
                 "id": exam.id,
                 "title": exam.title,
@@ -71,10 +76,8 @@ async def start_exam(
     """开始考试"""
     try:
         # 验证考试存在且已发布
-        exam = db.query(Exam).filter(
-            Exam.id == exam_id,
-            Exam.status == "PUBLISHED"
-        ).first()
+        exam_stmt = select(Exam).where(Exam.id == exam_id, Exam.status == "PUBLISHED")
+        exam = db.execute(exam_stmt).scalar_one_or_none()
 
         if not exam:
             raise HTTPException(
@@ -83,11 +86,12 @@ async def start_exam(
             )
 
         # 检查用户是否已有进行中的attempt
-        existing_attempt = db.query(Attempt).filter(
+        attempt_stmt = select(Attempt).where(
             Attempt.exam_id == exam_id,
             Attempt.user_id == current_user["id"],
             Attempt.status == "DOING"
-        ).first()
+        )
+        existing_attempt = db.execute(attempt_stmt).scalar_one_or_none()
 
         if existing_attempt:
             raise HTTPException(
@@ -107,13 +111,15 @@ async def start_exam(
         db.flush()  # 获取attempt.id
 
         # 获取试卷题目
-        paper_questions = db.query(PaperQuestion).filter(
+        paper_questions_stmt = select(PaperQuestion).where(
             PaperQuestion.paper_id == exam.paper_id
-        ).order_by(PaperQuestion.order_no).all()
+        ).order_by(PaperQuestion.order_no)
+        paper_questions = db.execute(paper_questions_stmt).scalars().all()
 
         questions = []
         for pq in paper_questions:
-            question = db.query(Question).filter(Question.id == pq.question_id).first()
+            question_stmt = select(Question).where(Question.id == pq.question_id)
+            question = db.execute(question_stmt).scalar_one_or_none()
             if question:
                 questions.append({
                     "id": question.id,
