@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 import csv
 import io
@@ -31,20 +32,24 @@ async def export_anonymized(current_user: dict = Depends(get_current_admin), db:
         writer.writerow(["anon_user_id", "attempt_id", "exam_id", "submitted_at", "total_score", "knowledge_id", "mastery", "wrong_question_id", "wrong_count", "next_review_at"])
 
         # For each user, export attempts and mastery and wrong_questions
-        users = db.query(User).all()
+        users_stmt = select(User)
+        users = db.execute(users_stmt).scalars().all()
         for u in users:
             anon = anonymize_user_id(u.id)
             # attempts
-            attempts = db.query(Attempt).filter(Attempt.user_id == u.id, Attempt.status == "SUBMITTED").all()
+            attempts_stmt = select(Attempt).where(Attempt.user_id == u.id, Attempt.status == "SUBMITTED")
+            attempts = db.execute(attempts_stmt).scalars().all()
             for a in attempts:
                 # write attempt row (knowledge/mastery/wrong fields empty)
                 writer.writerow([anon, a.id, a.exam_id, a.submitted_at.isoformat() if a.submitted_at else "", a.total_score, "", "", "", "", ""])
             # mastery
-            states = db.query(UserKnowledgeState).filter(UserKnowledgeState.user_id == u.id).all()
+            states_stmt = select(UserKnowledgeState).where(UserKnowledgeState.user_id == u.id)
+            states = db.execute(states_stmt).scalars().all()
             for s in states:
                 writer.writerow([anon, "", "", "", "", s.knowledge_id, float(s.mastery), "", "", ""])
             # wrong questions
-            wrongs = db.query(WrongQuestion).filter(WrongQuestion.user_id == u.id).all()
+            wrongs_stmt = select(WrongQuestion).where(WrongQuestion.user_id == u.id)
+            wrongs = db.execute(wrongs_stmt).scalars().all()
             for w in wrongs:
                 writer.writerow([anon, "", "", "", "", "", "", w.id, w.wrong_count, w.next_review_at.isoformat() if w.next_review_at else ""])
 

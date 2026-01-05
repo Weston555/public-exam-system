@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 from typing import Optional
 from datetime import datetime, date
@@ -25,12 +26,16 @@ async def list_wrong_questions(
     获取错题本（可仅返回到期复习项）
     """
     try:
-        q = db.query(WrongQuestion).filter(WrongQuestion.user_id == current_user["id"])
+        stmt = select(WrongQuestion).where(WrongQuestion.user_id == current_user["id"])
         if due_only:
-            q = q.filter(WrongQuestion.next_review_at <= datetime.utcnow())
+            stmt = stmt.where(WrongQuestion.next_review_at <= datetime.utcnow())
 
-        total = q.count()
-        items = q.order_by(WrongQuestion.next_review_at).offset((page - 1) * size).limit(size).all()
+        # 获取总数
+        count_stmt = stmt.with_only_columns(WrongQuestion.id)
+        total = db.execute(count_stmt).scalars().count()
+
+        # 获取分页数据
+        items = db.execute(stmt.order_by(WrongQuestion.next_review_at).offset((page - 1) * size).limit(size)).scalars().all()
 
         result = []
         for w in items:
@@ -77,10 +82,11 @@ async def generate_review_exam(
     try:
         # 查询到期错题
         now = datetime.utcnow()
-        due_q = db.query(WrongQuestion).filter(
+        due_q_stmt = select(WrongQuestion).where(
             WrongQuestion.user_id == current_user["id"],
             WrongQuestion.next_review_at <= now
-        ).order_by(WrongQuestion.next_review_at).limit(request.count).all()
+        ).order_by(WrongQuestion.next_review_at).limit(request.count)
+        due_q = db.execute(due_q_stmt).scalars().all()
 
         if not due_q:
             raise HTTPException(status_code=400, detail="暂无到期复习的错题")

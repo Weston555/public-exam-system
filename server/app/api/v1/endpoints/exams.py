@@ -31,8 +31,8 @@ async def get_exams(
         stmt = stmt.order_by(desc(Exam.created_at))
 
         # 获取总数
-        count_stmt = stmt.with_only_columns(Exam.id)
-        total = db.execute(count_stmt).scalars().count()
+        count_stmt = select(func.count()).select_from(stmt.subquery())
+        total = db.execute(count_stmt).scalar_one()
 
         # 分页获取数据
         exams = db.execute(stmt.offset((page - 1) * size).limit(size)).scalars().all()

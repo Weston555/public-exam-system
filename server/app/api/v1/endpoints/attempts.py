@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select, func, update
 from sqlalchemy.orm import Session
 from typing import List, Union, Optional
 from pydantic import BaseModel
@@ -35,10 +36,11 @@ async def submit_single_answer(
     """提交单题答案"""
     try:
         # 验证作答记录存在且属于当前用户
-        attempt = db.query(Attempt).filter(
+        attempt_stmt = select(Attempt).where(
             Attempt.id == attempt_id,
             Attempt.user_id == current_user["id"]
-        ).first()
+        )
+        attempt = db.execute(attempt_stmt).scalar_one_or_none()
 
         if not attempt:
             raise HTTPException(
@@ -53,9 +55,8 @@ async def submit_single_answer(
             )
 
         # 验证题目存在且属于该考试
-        question = db.query(Question).filter(
-            Question.id == answer_data.question_id
-        ).first()
+        question_stmt = select(Question).where(Question.id == answer_data.question_id)
+        question = db.execute(question_stmt).scalar_one_or_none()
 
         if not question:
             raise HTTPException(
@@ -72,10 +73,11 @@ async def submit_single_answer(
             normalized_answer = [str(answer_data.answer).strip()]
 
         # 检查是否已存在答案记录，如存在则更新，否则创建
-        existing_answer = db.query(Answer).filter(
+        existing_answer_stmt = select(Answer).where(
             Answer.attempt_id == attempt_id,
             Answer.question_id == answer_data.question_id
-        ).first()
+        )
+        existing_answer = db.execute(existing_answer_stmt).scalar_one_or_none()
 
         if existing_answer:
             # 更新答案
@@ -114,10 +116,11 @@ async def submit_attempt(
     """提交整个考试并进行判分"""
     try:
         # 验证作答记录存在且属于当前用户
-        attempt = db.query(Attempt).filter(
+        attempt_stmt = select(Attempt).where(
             Attempt.id == attempt_id,
             Attempt.user_id == current_user["id"]
-        ).first()
+        )
+        attempt = db.execute(attempt_stmt).scalar_one_or_none()
 
         if not attempt:
             raise HTTPException(
@@ -132,7 +135,8 @@ async def submit_attempt(
             )
 
         # 获取所有答案
-        answers = db.query(Answer).filter(Answer.attempt_id == attempt_id).all()
+        answers_stmt = select(Answer).where(Answer.attempt_id == attempt_id)
+        answers = db.execute(answers_stmt).scalars().all()
 
         if not answers:
             raise HTTPException(

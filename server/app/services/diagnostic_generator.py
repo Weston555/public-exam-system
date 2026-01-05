@@ -35,8 +35,9 @@ def generate_diagnostic_exam(
     if not top_level_kps:
         raise ValueError("没有找到一级知识点，无法生成诊断试卷")
 
-    # 2. 为每个一级知识点收集题目
+    # 2. 为每个一级知识点收集题目，避免重复
     selected_questions = []
+    selected_question_ids = set()  # 记录已选题目ID，避免重复
     kp_stats = []  # 记录每个知识点的抽题统计
 
     for kp in top_level_kps:
@@ -46,8 +47,15 @@ def generate_diagnostic_exam(
         # 获取相关题目
         questions = _get_questions_for_knowledge_points(db, kp_ids, max_difficulty)
 
+        # 过滤掉已被其他知识点选中的题目
+        available_questions = [q for q in questions if q.id not in selected_question_ids]
+
         # 随机抽取指定数量的题目
-        selected = _random_sample_questions(questions, per_top_kp)
+        selected = _random_sample_questions(available_questions, per_top_kp)
+
+        # 记录选中的题目ID
+        for q in selected:
+            selected_question_ids.add(q.id)
 
         selected_questions.extend(selected)
 
@@ -56,7 +64,8 @@ def generate_diagnostic_exam(
             "knowledge_point_id": kp.id,
             "knowledge_point_name": kp.name,
             "total_available": len(questions),
-            "selected_count": len(selected)
+            "selected_count": len(selected),
+            "available_after_filter": len(available_questions)
         })
 
     if not selected_questions:
@@ -64,12 +73,16 @@ def generate_diagnostic_exam(
 
     # 3. 创建试卷
     paper_config = {
-        "generation_rule": "按一级知识点抽题",
+        "type": "diagnostic",
+        "generation_rule": "按一级知识点随机抽题，避免重复",
         "per_top_kp": per_top_kp,
         "max_difficulty": max_difficulty,
+        "top_level_kp_count": len(top_level_kps),
         "knowledge_points": kp_stats,
         "total_questions": len(selected_questions),
-        "generated_at": datetime.now().isoformat()
+        "total_score": len(selected_questions) * 2.0,
+        "generated_at": datetime.now().isoformat(),
+        "algorithm_description": "智能诊断试卷生成：基于知识点树结构，按一级知识点分类抽题，确保知识点覆盖全面且题目不重复"
     }
 
     paper = Paper(
@@ -163,6 +176,9 @@ def _get_questions_for_knowledge_points(
     if not kp_ids:
         return []
 
+    # 注意：这里使用随机排序来实现随机抽题
+    # 在 SQLAlchemy 2.0 中，我们不能直接使用 func.random()
+    # 所以在应用层进行随机排序
     stmt = select(Question).join(
         QuestionKnowledgeMap, Question.id == QuestionKnowledgeMap.question_id
     ).where(
@@ -170,7 +186,10 @@ def _get_questions_for_knowledge_points(
         Question.difficulty <= max_difficulty
     ).distinct()
 
-    return db.execute(stmt).scalars().all()
+    questions = db.execute(stmt).scalars().all()
+    # 在应用层随机排序
+    random.shuffle(questions)
+    return questions
 
 
 def _random_sample_questions(questions: List[Question], count: int) -> List[Question]:
