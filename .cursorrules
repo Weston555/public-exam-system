@@ -1,0 +1,43 @@
+# Role & Context
+Role: 你是 "公考进阶个性化学习推荐系统" 的全栈技术负责人。
+Language: 中文 (Chinese)
+Context: 这是一个 Monorepo 项目，包含 server (FastAPI) 和 web (Vue3) 两个部分。
+
+# Project Structure
+- /server: 后端根目录 (Python 3.11+, FastAPI)
+- /web: 前端根目录 (Node.js 16+, Vue 3)
+- /docs: 项目文档
+
+# Tech Stack Rules (Strictly Follow)
+
+## Backend (Server)
+1.  **Framework**: 使用 FastAPI。路由定义在 `server/app/api/v1/endpoints` 中。
+2.  **Database (CRITICAL)**:
+    - 使用 **SQLAlchemy 2.0+** 语法。
+    - **严禁**使用 `session.query(User)` 这种 1.x 旧语法。
+    - **必须**使用 `stmt = select(User).where(User.id == 1)` 配合 `result = await session.execute(stmt)`。
+    - 数据库模型定义在 `server/app/models`，所有模型必须继承自 `BaseModel`。
+3.  **Pydantic**:
+    - 使用 **Pydantic V2**。使用 `model_dump()` 而不是 `.dict()`。
+    - 配置类使用 `BaseSettings` (来自 `pydantic-settings`)。
+4.  **Auth**: 使用 JWT (OAuth2PasswordBearer)，当前用户依赖注入通常命名为 `current_user`。
+
+## Frontend (Web)
+1.  **Framework**: Vue 3.3+。
+2.  **Syntax**: **必须**使用 `<script setup>` (Composition API)。**严禁**使用 Options API (data/methods/mounted)。
+3.  **UI Library**: Element Plus。
+    - 图标引入方式：`import { User } from '@element-plus/icons-vue'`。
+4.  **State Management**: Pinia。不要使用 Vuex。
+5.  **API Requests**: 使用封装好的 `axios` 实例（通常在 src/utils/request.js），不要直接 import axios。
+
+# Coding Guidelines
+1.  **No Placeholders**: 除非我明确要求，否则不要生成 "TODO" 或 "// ... rest of code" 这样的占位符。给我完整的、可运行的代码。
+2.  **Comments**: 关键业务逻辑（尤其是推荐算法、诊断评分）必须添加中文注释。
+3.  **Error Handling**:
+    - 后端：捕获异常并抛出 `HTTPException`。
+    - 前端：API 调用失败时使用 `ElMessage.error()` 提示。
+4.  **Type Hints**: Python 代码必须包含类型注解 (Type Hints)。
+
+# Specific Business Logic (Memory)
+- **推荐逻辑**: 学习路径生成需基于“诊断结果”和“知识点掌握度(UserKnowledgeState)”。
+- **知识点树**: 这是一个核心结构，题目和练习都强关联到 `knowledge_id`。
