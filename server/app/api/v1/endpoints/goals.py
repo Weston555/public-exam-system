@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from datetime import date
@@ -28,9 +29,8 @@ async def get_current_goal(
     db: Session = Depends(get_db)
 ):
     """获取当前用户的目标"""
-    goal = db.query(Goal).filter(
-        Goal.user_id == current_user["id"]
-    ).order_by(Goal.created_at.desc()).first()
+    stmt = select(Goal).where(Goal.user_id == current_user["id"]).order_by(Goal.created_at.desc())
+    goal = db.execute(stmt).scalar_one_or_none()
 
     if not goal:
         return None
@@ -98,10 +98,8 @@ async def update_goal(
     """更新学习目标"""
     try:
         # 查找目标
-        goal = db.query(Goal).filter(
-            Goal.id == goal_id,
-            Goal.user_id == current_user["id"]
-        ).first()
+        stmt = select(Goal).where(Goal.id == goal_id, Goal.user_id == current_user["id"])
+        goal = db.execute(stmt).scalar_one_or_none()
 
         if not goal:
             raise HTTPException(
@@ -110,7 +108,7 @@ async def update_goal(
             )
 
         # 更新字段
-        update_data = request.dict(exclude_unset=True)
+        update_data = request.model_dump(exclude_unset=True)
         for field, value in update_data.items():
             if hasattr(goal, field):
                 if field == "exam_date" and value <= date.today():
@@ -148,9 +146,12 @@ async def get_goals(
     db: Session = Depends(get_db)
 ):
     """获取用户的所有目标"""
-    goals = db.query(Goal).filter(
-        Goal.user_id == current_user["id"]
-    ).order_by(Goal.created_at.desc()).offset(skip).limit(limit).all()
+    stmt = select(Goal).where(Goal.user_id == current_user["id"]).order_by(Goal.created_at.desc()).offset(skip).limit(limit)
+    goals = db.execute(stmt).scalars().all()
+
+    # 获取总数
+    count_stmt = select(Goal).where(Goal.user_id == current_user["id"])
+    total = db.execute(count_stmt).scalars().count()
 
     return {
         "items": [
@@ -162,5 +163,5 @@ async def get_goals(
                 "created_at": goal.created_at.isoformat()
             } for goal in goals
         ],
-        "total": db.query(Goal).filter(Goal.user_id == current_user["id"]).count()
+        "total": total
     }
