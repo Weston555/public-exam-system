@@ -1,13 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 from typing import Optional
 from pydantic import BaseModel
 from datetime import datetime
 
 from ....core.database import get_db
-from ....models.paper import Exam, Paper, PaperQuestion, Question
-from ....models.question import QuestionKnowledgeMap
+from ....models.paper import Exam, Paper, PaperQuestion
+from ....models.question import Question
+from ....models.knowledge import QuestionKnowledgeMap
 from ....services.diagnostic_generator import generate_diagnostic_exam
 from ..deps import get_current_admin
 
@@ -66,6 +67,13 @@ async def admin_create_exam(
     db: Session = Depends(get_db)
 ):
     try:
+        # 如果提供了 paper_id，验证试卷存在
+        if payload.paper_id:
+            paper_stmt = select(Paper).where(Paper.id == payload.paper_id)
+            paper = db.execute(paper_stmt).scalar_one_or_none()
+            if not paper:
+                raise HTTPException(status_code=400, detail="指定的试卷不存在")
+
         exam = Exam(
             paper_id=payload.paper_id,
             title=payload.title,
@@ -78,6 +86,8 @@ async def admin_create_exam(
         db.commit()
         db.refresh(exam)
         return {"id": exam.id, "message": "创建成功", "status": exam.status}
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
