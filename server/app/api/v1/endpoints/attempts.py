@@ -11,6 +11,7 @@ from ....models.attempt import Attempt, Answer
 from ....models.question import Question
 from ....models.knowledge import QuestionKnowledgeMap
 from ....models.progress import UserKnowledgeState, WrongQuestion
+from ....models.paper import PaperQuestion, Exam as ExamModel
 from ..deps import get_current_student
 
 router = APIRouter()
@@ -144,6 +145,29 @@ async def submit_attempt(
                 detail="未找到任何答案记录"
             )
 
+        # 批量获取试卷信息（确保有paper_id）
+        if not attempt.exam or not attempt.exam.paper_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="考试试卷信息不完整"
+            )
+
+        paper_id = attempt.exam.paper_id
+        question_ids = [answer.question_id for answer in answers]
+
+        # 批量获取PaperQuestion分数映射
+        pq_stmt = select(PaperQuestion.question_id, PaperQuestion.score).where(
+            PaperQuestion.paper_id == paper_id,
+            PaperQuestion.question_id.in_(question_ids)
+        )
+        pq_results = db.execute(pq_stmt).all()
+        score_map = {row[0]: float(row[1]) for row in pq_results}
+
+        # 批量获取Questions
+        questions_stmt = select(Question).where(Question.id.in_(question_ids))
+        questions = db.execute(questions_stmt).scalars().all()
+        question_map = {q.id: q for q in questions}
+
         # 判分逻辑
         total_score = 0
         correct_count = 0
@@ -153,18 +177,12 @@ async def submit_attempt(
         knowledge_updates = {}
 
         for answer in answers:
-            question_stmt = select(Question).where(Question.id == answer.question_id)
-            question = db.execute(question_stmt).scalar_one_or_none()
+            question = question_map.get(answer.question_id)
             if not question:
                 continue
 
-            # 获取题目分数（从PaperQuestion读取）
-            paper_question_stmt = select(PaperQuestion).where(
-                PaperQuestion.paper_id == attempt.exam.paper_id,
-                PaperQuestion.question_id == question.id
-            )
-            paper_question = db.execute(paper_question_stmt).scalar_one_or_none()
-            question_score = float(paper_question.score) if paper_question else 2.0
+            # 获取题目分数（从预加载的score_map读取）
+            question_score = score_map.get(question.id, 2.0)
 
             # 按题型进行判分
             is_correct = False

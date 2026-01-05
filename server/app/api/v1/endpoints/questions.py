@@ -120,9 +120,12 @@ async def create_question(
     """创建题目 (管理员权限)"""
     try:
         # 验证知识点ID
+        kp_stmt = select(KnowledgePoint).where(KnowledgePoint.id.in_(request.knowledge_ids))
+        existing_kps = db.execute(kp_stmt).scalars().all()
+        existing_kp_ids = {kp.id for kp in existing_kps}
+
         for knowledge_id in request.knowledge_ids:
-            knowledge_point = db.query(KnowledgePoint).filter(KnowledgePoint.id == knowledge_id).first()
-            if not knowledge_point:
+            if knowledge_id not in existing_kp_ids:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=f"知识点ID {knowledge_id} 不存在"
@@ -176,7 +179,8 @@ async def update_question(
     """更新题目 (管理员权限)"""
     try:
         # 查找题目
-        question = db.query(Question).filter(Question.id == question_id).first()
+        question_stmt = select(Question).where(Question.id == question_id)
+        question = db.execute(question_stmt).scalar_one_or_none()
         if not question:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -185,16 +189,19 @@ async def update_question(
 
         # 验证知识点ID
         if request.knowledge_ids is not None:
+            kp_stmt = select(KnowledgePoint).where(KnowledgePoint.id.in_(request.knowledge_ids))
+            existing_kps = db.execute(kp_stmt).scalars().all()
+            existing_kp_ids = {kp.id for kp in existing_kps}
+
             for knowledge_id in request.knowledge_ids:
-                knowledge_point = db.query(KnowledgePoint).filter(KnowledgePoint.id == knowledge_id).first()
-                if not knowledge_point:
+                if knowledge_id not in existing_kp_ids:
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
                         detail=f"知识点ID {knowledge_id} 不存在"
                     )
 
         # 更新题目字段
-        update_data = request.dict(exclude_unset=True, exclude={"knowledge_ids"})
+        update_data = request.model_dump(exclude_unset=True, exclude={"knowledge_ids"})
         for field, value in update_data.items():
             if hasattr(question, field):
                 setattr(question, field, value)
@@ -202,9 +209,12 @@ async def update_question(
         # 更新知识点映射
         if request.knowledge_ids is not None:
             # 删除原有映射
-            db.query(QuestionKnowledgeMap).filter(
+            delete_stmt = select(QuestionKnowledgeMap).where(
                 QuestionKnowledgeMap.question_id == question_id
-            ).delete()
+            )
+            mappings_to_delete = db.execute(delete_stmt).scalars().all()
+            for mapping in mappings_to_delete:
+                db.delete(mapping)
 
             # 创建新映射
             for knowledge_id in request.knowledge_ids:
@@ -240,7 +250,8 @@ async def delete_question(
     """删除题目 (管理员权限)"""
     try:
         # 查找题目
-        question = db.query(Question).filter(Question.id == question_id).first()
+        question_stmt = select(Question).where(Question.id == question_id)
+        question = db.execute(question_stmt).scalar_one_or_none()
         if not question:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -248,9 +259,12 @@ async def delete_question(
             )
 
         # 删除题目-知识点映射
-        db.query(QuestionKnowledgeMap).filter(
+        delete_stmt = select(QuestionKnowledgeMap).where(
             QuestionKnowledgeMap.question_id == question_id
-        ).delete()
+        )
+        mappings_to_delete = db.execute(delete_stmt).scalars().all()
+        for mapping in mappings_to_delete:
+            db.delete(mapping)
 
         # 删除题目
         db.delete(question)

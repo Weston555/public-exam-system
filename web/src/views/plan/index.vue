@@ -127,6 +127,15 @@
                           {{ item.expected_minutes }}分钟
                         </el-tag>
                         <el-button
+                          v-if="item.status === 'TODO' && (item.type === 'PRACTICE' || item.type === 'REVIEW')"
+                          type="primary"
+                          size="small"
+                          @click="startItem(item)"
+                          :loading="startingItem === item.id"
+                        >
+                          {{ item.type === 'PRACTICE' ? '开始练习' : '开始复习' }}
+                        </el-button>
+                        <el-button
                           v-if="item.status === 'TODO'"
                           type="success"
                           size="small"
@@ -216,6 +225,7 @@ const router = useRouter()
 const loading = ref(true)
 const generating = ref(false)
 const completingItem = ref(null)
+const startingItem = ref(null)
 const activePlan = ref(null)
 
 const sortedDates = computed(() => {
@@ -415,6 +425,46 @@ const skipItem = async (itemId) => {
     ElMessage.error(error.response?.data?.detail || '更新任务状态失败')
   } finally {
     completingItem.value = null
+  }
+}
+
+const startItem = async (item) => {
+  try {
+    startingItem.value = item.id
+
+    let genResponse
+
+    if (item.type === 'PRACTICE') {
+      // 生成练习试卷
+      genResponse = await authStore.api.post('/practice/generate', {
+        knowledge_id: item.knowledge_id,
+        count: 10,
+        mode: 'ADAPTIVE'
+      })
+    } else if (item.type === 'REVIEW') {
+      // 生成复习试卷
+      genResponse = await authStore.api.post('/wrong-questions/review/generate', {
+        count: 10
+      })
+    }
+
+    const examId = genResponse.data.exam_id
+
+    // 开始考试
+    const startResponse = await authStore.api.post(`/exams/${examId}/start`)
+
+    ElMessage.success('已进入答题页面')
+
+    // 跳转到答题页面
+    await router.push({
+      path: '/exam',
+      query: { attempt_id: startResponse.data.attempt_id }
+    })
+
+  } catch (error) {
+    ElMessage.error(error.response?.data?.detail || '开始任务失败')
+  } finally {
+    startingItem.value = null
   }
 }
 

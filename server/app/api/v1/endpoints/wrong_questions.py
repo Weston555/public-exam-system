@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 from typing import Optional
 from datetime import datetime, date
@@ -31,23 +31,50 @@ async def list_wrong_questions(
             stmt = stmt.where(WrongQuestion.next_review_at <= datetime.utcnow())
 
         # 获取总数
-        count_stmt = stmt.with_only_columns(WrongQuestion.id)
-        total = db.execute(count_stmt).scalars().count()
+        subq = stmt.order_by(None).with_only_columns(WrongQuestion.id).subquery()
+        total_stmt = select(func.count()).select_from(subq)
+        total = db.execute(total_stmt).scalar_one()
 
         # 获取分页数据
         items = db.execute(stmt.order_by(WrongQuestion.next_review_at).offset((page - 1) * size).limit(size)).scalars().all()
 
+        if not items:
+            return {"items": [], "total": total, "page": page, "size": size}
+
+        # 批量获取题目信息
+        question_ids = [w.question_id for w in items]
+        questions_stmt = select(Question).where(Question.id.in_(question_ids))
+        questions = db.execute(questions_stmt).scalars().all()
+        question_map = {q.id: q for q in questions}
+
+        # 批量获取知识点映射
+        kp_maps_stmt = select(QuestionKnowledgeMap).where(QuestionKnowledgeMap.question_id.in_(question_ids))
+        kp_maps = db.execute(kp_maps_stmt).scalars().all()
+
+        # 收集所有知识点ID
+        knowledge_ids = list(set(km.knowledge_id for km in kp_maps))
+        if knowledge_ids:
+            kps_stmt = select(KnowledgePoint).where(KnowledgePoint.id.in_(knowledge_ids))
+            kps = db.execute(kps_stmt).scalars().all()
+            kp_map = {kp.id: kp for kp in kps}
+        else:
+            kp_map = {}
+
+        # 按题目ID分组知识点映射
+        question_kps = {}
+        for km in kp_maps:
+            if km.question_id not in question_kps:
+                question_kps[km.question_id] = []
+            if km.knowledge_id in kp_map:
+                question_kps[km.question_id].append({
+                    "id": kp_map[km.knowledge_id].id,
+                    "name": kp_map[km.knowledge_id].name
+                })
+
         result = []
         for w in items:
-            # question basic info (without correct answer)
-            question = db.query(Question).filter(Question.id == w.question_id).first()
-            # knowledge points
-            kps = db.query(QuestionKnowledgeMap).filter(QuestionKnowledgeMap.question_id == w.question_id).all()
-            kp_names = []
-            for km in kps:
-                kp = db.query(KnowledgePoint).filter(KnowledgePoint.id == km.knowledge_id).first()
-                if kp:
-                    kp_names.append({"id": kp.id, "name": kp.name})
+            question = question_map.get(w.question_id)
+            kp_names = question_kps.get(w.question_id, [])
 
             result.append({
                 "question_id": w.question_id,
