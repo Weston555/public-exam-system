@@ -12,6 +12,7 @@ from ....models.question import Question
 from ....models.knowledge import QuestionKnowledgeMap
 from ....models.progress import UserKnowledgeState, WrongQuestion
 from ....models.paper import PaperQuestion, Exam as ExamModel
+from ....models.plan import LearningPlan, PlanItem
 from ..deps import get_current_student
 
 router = APIRouter()

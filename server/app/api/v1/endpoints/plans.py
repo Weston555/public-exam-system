@@ -12,7 +12,7 @@ from ....models.plan import Goal, LearningPlan, PlanItem
 from ....models.attempt import Attempt
 from ....models.question import Question
 from ....models.knowledge import QuestionKnowledgeMap
-from ....models.progress import UserKnowledgeState
+from ....models.progress import UserKnowledgeState, WrongQuestion
 from ....models.paper import Paper, PaperQuestion, Exam
 from ....services.recommendation import generate_learning_plan
 from ....services.exam_runtime import start_exam_for_user
@@ -168,7 +168,7 @@ def generate_review_exam(db: Session, user_id: int, count: int = 10) -> Exam:
     exam = Exam(
         paper_id=paper.id,
         title=f"到期复习 - {user_id}",
-        category="PRACTICE",
+        category="REVIEW",
         duration_minutes=0,
         status="PUBLISHED",
         created_by=user_id
