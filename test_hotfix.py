@@ -21,35 +21,33 @@ def test_hotfix():
     headers = {"Authorization": f"Bearer {token}"}
     print("✅ 登录成功")
 
-    # 2. 测试 practice generate
-    print("2. 测试练习生成...")
-    practice_resp = requests.post(f"{BASE_URL}/practice/generate", json={
-        "knowledge_id": 1,
-        "count": 5,
-        "mode": "ADAPTIVE"
-    }, headers=headers)
+    # 2. 测试获取诊断考试（用于测试判分功能）
+    print("2. 获取诊断考试列表...")
+    exams_resp = requests.get(f"{BASE_URL}/exams?category=DIAGNOSTIC&page=1&size=1", headers=headers)
+    assert exams_resp.status_code == 200, f"获取考试列表失败: {exams_resp.text}"
 
-    if practice_resp.status_code != 200:
-        print(f"⚠️ 练习生成失败（可能没有题目）: {practice_resp.status_code} - {practice_resp.text}")
-        exam_id = None
+    exams_data = exams_resp.json()
+    if not exams_data["items"]:
+        print("⚠️ 没有诊断考试，跳过判分测试")
+        attempt_id = None
     else:
-        exam_id = practice_resp.json()["exam_id"]
-        print(f"✅ 练习生成成功，exam_id: {exam_id}")
+        exam_id = exams_data["items"][0]["id"]
+        print(f"找到诊断考试，exam_id: {exam_id}")
 
-    # 3. 如果有exam_id，测试开始考试
-    attempt_id = None
-    if exam_id:
-        print("3. 测试开始考试...")
+        # 3. 开始考试
+        print("3. 开始诊断考试...")
         start_resp = requests.post(f"{BASE_URL}/exams/{exam_id}/start", headers=headers)
         assert start_resp.status_code == 200, f"开始考试失败: {start_resp.text}"
         attempt_id = start_resp.json()["attempt_id"]
         print(f"✅ 开始考试成功，attempt_id: {attempt_id}")
 
-        # 4. 获取题目并提交至少一题
+        # 4. 提交至少一题答案
         questions = start_resp.json()["questions"]
         if questions:
             print("4. 提交答案...")
-            question = questions[0]["question"]
+            question_data = questions[0]
+            question = question_data["question"]
+
             # 根据题型构造答案
             if question["type"] == "SINGLE":
                 answer = "A"
@@ -68,13 +66,16 @@ def test_hotfix():
             assert submit_answer_resp.status_code == 200, f"提交答案失败: {submit_answer_resp.text}"
             print("✅ 提交答案成功")
 
-            # 5. 提交考试（这里会调用判分逻辑，测试PaperQuestion导入是否正常）
-            print("5. 提交考试（测试判分）...")
+            # 5. 提交考试（测试判分功能和PaperQuestion导入）
+            print("5. 提交考试（测试判分和PaperQuestion导入）...")
             submit_resp = requests.post(f"{BASE_URL}/attempts/{attempt_id}/submit", headers=headers)
             assert submit_resp.status_code == 200, f"提交考试失败: {submit_resp.text}"
             print(f"✅ 提交考试成功，total_score: {submit_resp.json().get('total_score')}")
+        else:
+            print("⚠️ 考试没有题目，跳过答案提交")
+            attempt_id = None
 
-    # 6. 测试 wrong_questions 接口
+    # 6. 测试错题本接口
     print("6. 测试错题本接口...")
     wrong_resp = requests.get(f"{BASE_URL}/wrong-questions?due_only=false&page=1&size=20", headers=headers)
     assert wrong_resp.status_code == 200, f"错题本查询失败: {wrong_resp.text}"
