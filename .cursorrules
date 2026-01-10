@@ -7,6 +7,7 @@ Context: Monorepo，包含 server(FastAPI) 与 web(Vue3)。
 - /server: Python 3.11+，FastAPI
 - /web: Node.js 16+，Vue 3
 - /docs: 文档
+- 约定：前端源码以 /web 为准；若仓库中存在其它前端目录（如 /src），视为历史/遗留，不要改动，避免改错文件。
 
 # ===== Backend Rules (Server) =====
 1) Framework
@@ -26,24 +27,34 @@ Context: Monorepo，包含 server(FastAPI) 与 web(Vue3)。
     res = await db.execute(stmt)
     user = res.scalars().first()
 
+- 常见统计写法（禁止 scalars().count()）：
+  - subq = stmt.order_by(None).with_only_columns(Model.id).subquery()
+  - total = db.execute(select(func.count()).select_from(subq)).scalar_one()
+
 - 模型继承：必须继承仓库已有的 Base / DeclarativeBase（不要新建 BaseModel）
 - 若需要改表结构：必须同步更新 Alembic 迁移（禁止只改 models 不迁移）
+- 禁止为“省事”在 endpoints 里写大量组装/计算逻辑；核心逻辑必须下沉到 services
 
 3) Pydantic (V2)
 - 使用 Pydantic V2：用 model_dump()/model_validate()
+- 严禁使用 request.dict() / schema.dict()
 - settings 用 pydantic-settings（BaseSettings）
+- Response schema 字段尽量显式 Optional（避免返回结构不一致导致前端崩）
 
 4) Auth & RBAC
 - JWT + OAuth2PasswordBearer
 - 当前用户依赖统一命名：current_user
 - 管理员接口必须加角色校验（RBAC）
+- endpoint 层只做：参数校验 / 权限 / 调用 service / 返回 schema
 
 5) Services Layer（论文/答辩加分项）
 - 推荐算法、组卷、判分这类“核心逻辑”必须抽到 server/app/services/ 下
   例如：
   - services/recommendation.py 生成学习路径
-  - services/exam_service.py 生成诊断卷/组卷
-- endpoints 只做：参数校验/权限/调用 service/返回 schema
+  - services/diagnostic_generator.py / services/paper_template.py 生成诊断卷/模板组卷
+  - services/mock_generator.py 生成模拟卷
+  - services/scoring.py 客观题判分/主观题处理
+- endpoints 只调用 service，禁止复制粘贴同一段业务逻辑到多个 endpoint
 
 # ===== Frontend Rules (Web) =====
 1) Vue
@@ -59,7 +70,7 @@ Context: Monorepo，包含 server(FastAPI) 与 web(Vue3)。
 - Pinia（不要 Vuex）
 
 4) API Requests
-- 必须使用项目现有的 axios 封装实例
+- 必须使用项目现有的 axios 封装实例（例如 authStore.api / request.ts / request.js）
 - 不要直接 import axios
 - 若不确定封装位置：先全局搜索（request.ts / request.js / http.ts / apiClient）再使用
 - 统一错误提示：ElMessage.error()
@@ -67,30 +78,103 @@ Context: Monorepo，包含 server(FastAPI) 与 web(Vue3)。
 5) Router
 - 路由统一在 web/src/router 下维护
 - 菜单跳转路径必须与 router 保持一致（避免 /diagnosis vs /diagnostic 这种错误）
+- 重要页面（home/dashboard/plan/exam）路径不可随意改名；若必须改，需同时更新菜单与跳转入口
 
-# ===== Execution & Quality Gates (避免你最近卡住的点) =====
+# ===== Execution & Quality Gates (避免卡命令/卡环境) =====
 1) 命令执行环境
-- shell 命令必须在 PowerShell/CMD 运行，严禁在 Python REPL(>>>) 执行 cd/&& 等命令
-- 给出任何命令时，必须注明“在 PowerShell 执行”
+- shell 命令必须在【你当前选择的终端】执行（PowerShell / CMD / WSL Ubuntu / Git Bash 均可）
+- 严禁在 Python REPL(>>>) 执行 cd/&&/docker/npm 等 shell 命令
+- 给出任何命令时，必须标注【在什么终端执行】（例如：PowerShell 或 WSL Ubuntu）
 
 2) 改动验收（每次改动必须提供最小验收步骤）
-- 后端至少给出 1 个 curl/Swagger 测试或 python requests 脚本（说明在 PowerShell 运行）
+- 后端至少给出 1 个 curl/Swagger 测试或 python requests 脚本（注明在哪个终端运行）
 - 前端至少说明访问哪个页面、预期看到什么
+- 若改动涉及登录/鉴权/计划/考试闭环，必须提供一条可复制的冒烟脚本
 
 3) 禁止占位
 - 除非用户明确要求，否则不写 TODO/placeholder，必须给可运行代码
+- 禁止 “// ... rest of code” 省略，必须完整可运行
 
 4) 注释
-- 推荐算法/诊断组卷/评分逻辑必须有中文注释（论文直接可引用）
+- 推荐算法 / 诊断组卷 / 模板组卷 / 判分逻辑必须有中文注释（论文直接可引用）
+- 关键字段（mastery/weight/estimated_minutes/ratio）必须注释其含义与来源
 
 5) 类型与异常
 - Python 必须写类型注解
 - 后端异常要转 HTTPException，前端用 ElMessage.error 提示
+- 禁止吞异常；遇到外键/找不到资源/权限不足必须返回清晰 detail
 
-# ===== Business Rules =====
+# ===== Business Rules（系统必须“像公考”而不是通用考试） =====
+
+## A. 公考业务域约束（必须遵守，禁止泛化）
+1) 科目（Subject）
+- 行测 = XINGCE
+- 申论 = SHENLUN
+（可扩展：公基 = GONGJI；面试 = MIANSHI，但默认不做）
+
+2) 行测模块（XINGCE Modules）
+- 常识判断：CS
+- 言语理解与表达：YY
+- 数量关系：SL
+- 判断推理：PD
+- 资料分析：ZL
+
+3) 申论模块/题型（SHENLUN Modules）
+- 归纳概括：GN
+- 综合分析：ZH
+- 提出对策：DC
+- 应用文写作：YYW
+- 文章写作：WZ
+
+4) 题型（Question.type 必须能表达公考）
+- SINGLE（单选：行测主力）
+- MULTI（多选：少量）
+- JUDGE（判断：少量）
+- FILL（填空/主观填空）
+- SHORT（材料问答：申论小题）
+- ESSAY（作文：申论大作文，必须支持人工评分/教师评分，不能自动判分）
+
+5) 考试类别（Exam.category 语义必须固定）
+- DIAGNOSTIC：基线诊断（按模块均衡覆盖）
+- PRACTICE：专项练习（按模块/知识点出题）
+- REVIEW：错题复习（从错题本抽题，按到期优先）
+- MOCK：模拟卷（按模块配比抽题，便于答辩解释）
+
+## B. 组卷模板（必须体现公考结构）
+1) DIAGNOSTIC（基线诊断）
+- 行测必须“模块均衡覆盖”（CS/YY/SL/PD/ZL 每模块至少 2 题，demo 可小规模）
+- Paper.config_json 必须记录：每模块目标数量、实际命中数量、补齐策略、难度范围
+
+2) MOCK（模拟卷）
+- 必须支持按模块配比抽题
+- demo 配比建议：20 题 = YY4 / SL4 / PD4 / ZL4 / CS4
+- Paper.config_json 必须记录：ratio、实际命中、补齐来源、去重信息
+
+3) PRACTICE（专项练习）
+- 按 knowledge_id 或 module 抽题
+- 难度可自适应（mastery 低 -> 简单优先；mastery 高 -> 中难优先）
+- 必须去重；不足要有明确降级策略并写入 config_json
+
+4) REVIEW（错题复习）
+- 题目只来自 WrongQuestion
+- 优先到期（due_at）与低 mastery；不足可用“最近错题”补齐
+- 必须记录本次复习覆盖的知识点范围与错题来源
+
+## C. 推荐与计划（必须可答辩）
 - 推荐路径生成必须基于：
   - 诊断结果 / attempts 结果
   - UserKnowledgeState.mastery
-  - KnowledgePoint.weight/estimated_minutes
+  - KnowledgePoint.weight / estimated_minutes
   - Goal.daily_minutes
-- 知识点树是核心：题目与练习必须强关联 knowledge_id（通过映射表 join 得到）
+- PlanItem 必须能表达“科目/模块/知识点”的来源（可通过 knowledge tree 的一级/二级节点表达）
+- 学员完成考试提交后，若该 attempt.exam_id 对应 PlanItem.exam_id，应自动把 PlanItem 标记 DONE（闭环）
+
+## D. 可视化与分析（必须按模块维度）
+- Analytics 必须提供“按模块聚合”的 mastery/正确率（用于雷达图、趋势图）
+- 前端 dashboard 的雷达图维度必须是：行测五模块 或 申论五题型（不可用泛化维度）
+- 任何汇总数字必须可解释（返回字段应包含 subject/module code）
+
+## E. 数据与种子（Seed）要求
+- seed.py 必须包含“公务员考试(ROOT) → 行测/申论 → 模块 → 子知识点”的标准树
+- KnowledgePoint 必须支持 code（如 XINGCE_YY / SHENLUN_GN），并合理设置 weight/estimated_minutes（为推荐算法服务）
+- seed 必须幂等：重复执行不会生成重复节点
