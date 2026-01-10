@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Body
 from sqlalchemy import select, desc, func
 from sqlalchemy.orm import Session
 from typing import Optional
 from datetime import datetime
+from pydantic import BaseModel
 
 from ....core.database import get_db
 from ....models.paper import Exam, Paper, PaperQuestion
@@ -11,6 +12,11 @@ from ....models.question import Question
 from ..deps import get_current_student
 
 router = APIRouter()
+
+
+class MockGenerateRequest(BaseModel):
+    count: int = 20
+    duration_minutes: int = 60
 
 
 @router.get("/")
@@ -85,4 +91,36 @@ async def start_exam(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"开始考试失败: {str(e)}"
+        )
+
+
+@router.post("/mock/generate")
+async def generate_mock_exam(
+    request: MockGenerateRequest,
+    current_user: dict = Depends(get_current_student),
+    db: Session = Depends(get_db)
+):
+    """生成个性化模拟考试"""
+    try:
+        print(f"DEBUG: mock/generate called with count={request.count}, duration_minutes={request.duration_minutes}")
+        from ....services.mock_generator import generate_personalized_mock_exam
+
+        exam = generate_personalized_mock_exam(
+            db=db,
+            user_id=current_user["id"],
+            count=request.count,
+            duration_minutes=request.duration_minutes
+        )
+
+        return {
+            "exam_id": exam.id,
+            "paper_id": exam.paper_id,
+            "count": request.count
+        }
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"生成模拟考试失败: {str(e)}"
         )

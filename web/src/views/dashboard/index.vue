@@ -1,5 +1,8 @@
 <template>
-  <el-card class="dashboard-card">
+  <div class="dashboard-view">
+    <BannerCarousel />
+
+    <el-card class="dashboard-card">
     <template #header>
       <div class="header-row">
         <h3>学习仪表板</h3>
@@ -69,12 +72,14 @@
       </el-row>
     </div>
   </el-card>
+  </div>
 </template>
 
 <script setup>
 import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useAuthStore } from '../../stores/auth'
+import BannerCarousel from '../../components/BannerCarousel.vue'
 import { use } from 'echarts/core'
 import VChart from 'vue-echarts'
 import { CanvasRenderer } from 'echarts/renderers'
@@ -184,7 +189,8 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.dashboard-card { max-width: 1000px; margin: 20px auto; }
+.dashboard-view { max-width: 1000px; margin: 20px auto; }
+.dashboard-card { margin: 0 auto; }
 .metric-title { color: #606266; font-size: 14px; }
 .metric-value { font-size: 28px; font-weight: 700; margin-top: 8px; }
 </style>

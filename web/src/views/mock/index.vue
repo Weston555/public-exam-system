@@ -3,8 +3,13 @@
     <el-card class="box-card">
       <template #header>
         <div class="card-header">
-          <span>模拟考试</span>
-          <el-text type="info">模拟真实考试环境，检验学习成果</el-text>
+          <div class="header-left">
+            <span>模拟考试</span>
+            <el-text type="info">模拟真实考试环境，检验学习成果</el-text>
+          </div>
+          <el-button type="primary" @click="generatePersonalizedMock" :loading="generating">
+            生成个性化模拟卷
+          </el-button>
         </div>
       </template>
 
@@ -82,6 +87,7 @@ const loading = ref(false)
 
 const history = ref([])
 const historyLoading = ref(false)
+const generating = ref(false)
 
 const fetchExams = async () => {
   loading.value = true
@@ -122,6 +128,27 @@ const startExam = async (examId) => {
   }
 }
 
+const generatePersonalizedMock = async () => {
+  generating.value = true
+  try {
+    const response = await authStore.api.post('/exams/mock/generate', {
+      count: 20,
+      duration_minutes: 60
+    })
+
+    ElMessage.success('个性化模拟卷生成成功，正在开始考试...')
+
+    // 自动开始考试
+    const examId = response.data.exam_id
+    await startExam(examId)
+
+  } catch (error) {
+    ElMessage.error(error.response?.data?.detail || '生成个性化模拟卷失败')
+  } finally {
+    generating.value = false
+  }
+}
+
 const viewResult = (attemptId) => {
   router.push({ path: '/exam', query: { attempt_id: attemptId, view_only: 'true' } })
 }
@@ -145,6 +172,11 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+.header-left {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 </style>
 
