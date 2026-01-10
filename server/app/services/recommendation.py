@@ -32,6 +32,15 @@ def generate_learning_plan(db: Session, user_id: int, days: int) -> dict:
     start_date = date.today()
     end_date = start_date + timedelta(days=days - 1)
 
+    # 2.5. 将用户的所有旧计划设置为inactive
+    from sqlalchemy import update
+    db.execute(
+        update(LearningPlan).where(
+            LearningPlan.user_id == user_id,
+            LearningPlan.is_active == True
+        ).values(is_active=False)
+    )
+
     # 3. 获取所有知识点及其权重
     stmt = select(KnowledgePoint)
     knowledge_points = db.execute(stmt).scalars().all()

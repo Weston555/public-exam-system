@@ -432,34 +432,23 @@ const startItem = async (item) => {
   try {
     startingItem.value = item.id
 
-    let genResponse
+    // 调用统一的任务开始接口
+    const response = await authStore.api.post(`/plans/items/${item.id}/start`)
 
-    if (item.type === 'PRACTICE') {
-      // 生成练习试卷
-      genResponse = await authStore.api.post('/practice/generate', {
-        knowledge_id: item.knowledge_id,
-        count: 10,
-        mode: 'ADAPTIVE'
+    const { action, attempt_id, path } = response.data
+
+    if (action === 'EXAM') {
+      ElMessage.success('已进入答题页面')
+      // 跳转到答题页面
+      await router.push({
+        path: '/exam',
+        query: { attempt_id: attempt_id }
       })
-    } else if (item.type === 'REVIEW') {
-      // 生成复习试卷
-      genResponse = await authStore.api.post('/wrong-questions/review/generate', {
-        count: 10
-      })
+    } else if (action === 'NAVIGATE') {
+      ElMessage.success('正在跳转到学习页面')
+      // 跳转到指定页面
+      await router.push(path)
     }
-
-    const examId = genResponse.data.exam_id
-
-    // 开始考试
-    const startResponse = await authStore.api.post(`/exams/${examId}/start`)
-
-    ElMessage.success('已进入答题页面')
-
-    // 跳转到答题页面
-    await router.push({
-      path: '/exam',
-      query: { attempt_id: startResponse.data.attempt_id }
-    })
 
   } catch (error) {
     ElMessage.error(error.response?.data?.detail || '开始任务失败')
