@@ -385,6 +385,26 @@ async def submit_attempt(
         attempt.total_score = total_score
         attempt.status = "SUBMITTED"
 
+        # 如果该attempt对应某个PlanItem，则自动完成该计划任务
+        if attempt.exam_id:
+            from ....models.plan import LearningPlan, PlanItem
+            # 查找对应的计划任务
+            plan_item_stmt = select(PlanItem).where(
+                PlanItem.exam_id == attempt.exam_id,
+                PlanItem.plan_id.in_(
+                    select(LearningPlan.id).where(
+                        LearningPlan.user_id == current_user["id"],
+                        LearningPlan.is_active == True
+                    )
+                )
+            )
+            plan_item = db.execute(plan_item_stmt).scalar_one_or_none()
+
+            # 如果找到对应的计划任务，自动标记为完成
+            if plan_item and plan_item.status == "TODO":
+                plan_item.status = "DONE"
+                plan_item.completed_at = datetime.utcnow()
+
         db.commit()
 
         return {

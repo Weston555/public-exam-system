@@ -15,6 +15,7 @@ from ....models.knowledge import QuestionKnowledgeMap
 from ....models.progress import UserKnowledgeState
 from ....models.paper import Paper, PaperQuestion, Exam
 from ....services.recommendation import generate_learning_plan
+from ....services.exam_runtime import start_exam_for_user
 from ..deps import get_current_student
 
 router = APIRouter()
@@ -438,6 +439,91 @@ async def start_plan_item(
                 action="EXAM",
                 attempt_id=attempt.id
             )
+
+        elif item.type == "LEARN":
+            # 学习任务，跳转到学习页面
+            return PlanItemStartResponse(
+                action="NAVIGATE",
+                path="/practice"  # 或 "/knowledge"
+            )
+
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"不支持的任务类型: {item.type}"
+            )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"开始任务失败: {str(e)}"
+        )
+
+
+@router.post("/items/{item_id}/start")
+async def start_plan_item(
+    item_id: int,
+    current_user: dict = Depends(get_current_student),
+    db: Session = Depends(get_db)
+) -> PlanItemStartResponse:
+    """
+    开始计划项任务（生成考试并开始答题）
+    """
+    try:
+        # 验证计划项存在且属于当前用户
+        item_stmt = select(PlanItem).where(
+            PlanItem.id == item_id,
+            PlanItem.plan_id.in_(
+                select(LearningPlan.id).where(
+                    LearningPlan.user_id == current_user["id"],
+                    LearningPlan.is_active == True
+                )
+            )
+        )
+        item = db.execute(item_stmt).scalar_one_or_none()
+
+        if not item:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="计划项不存在"
+            )
+
+        if item.status != "TODO":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="该任务已完成或已跳过"
+            )
+
+        # 根据类型处理
+        if item.type in ["PRACTICE", "REVIEW"]:
+            # 生成或复用考试
+            if not item.exam_id:
+                # 生成新考试
+                if item.type == "PRACTICE":
+                    exam = generate_practice_exam(
+                        db, current_user["id"], item.knowledge_id, count=10, mode="ADAPTIVE"
+                    )
+                else:  # REVIEW
+                    exam = generate_review_exam(db, current_user["id"], count=10)
+
+                # 更新计划项的exam_id
+                item.exam_id = exam.id
+                db.commit()
+            else:
+                # 使用现有考试
+                exam_stmt = select(Exam).where(Exam.id == item.exam_id)
+                exam = db.execute(exam_stmt).scalar_one_or_none()
+                if not exam:
+                    raise HTTPException(
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        detail="关联的考试不存在"
+                    )
+
+            # 开始考试
+            return start_exam_for_user(db, exam.id, current_user["id"])
 
         elif item.type == "LEARN":
             # 学习任务，跳转到学习页面

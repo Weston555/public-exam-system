@@ -86,7 +86,7 @@
 
           <el-timeline>
             <el-timeline-item
-              v-for="(items, dateStr) in sortedDates"
+              v-for="dateStr in sortedDates"
               :key="dateStr"
               :timestamp="formatDate(dateStr)"
               placement="top"
@@ -106,7 +106,7 @@
 
                 <div class="day-items">
                   <div
-                    v-for="item in activePlan.items_by_date[dateStr]"
+                    v-for="item in (activePlan?.items_by_date?.[dateStr] || [])"
                     :key="item.id"
                     class="plan-item"
                     :class="{ 'completed': item.status === 'DONE', 'skipped': item.status === 'SKIPPED' }"
@@ -286,7 +286,7 @@ const getDayTitle = (dateStr) => {
 }
 
 const getDayStatus = (dateStr) => {
-  const items = activePlan.value.items_by_date[dateStr]
+  const items = activePlan.value?.items_by_date?.[dateStr] || []
   const completed = items.filter(item => item.status === 'DONE').length
   const total = items.length
 
