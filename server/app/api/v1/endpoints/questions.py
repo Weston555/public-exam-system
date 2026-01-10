@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+from sqlalchemy import select, func, or_, delete
 from sqlalchemy.orm import Session
-from sqlalchemy import or_, and_
 from typing import List, Optional
 from pydantic import BaseModel
 from math import ceil
@@ -209,12 +209,10 @@ async def update_question(
         # 更新知识点映射
         if request.knowledge_ids is not None:
             # 删除原有映射
-            delete_stmt = select(QuestionKnowledgeMap).where(
+            delete_stmt = delete(QuestionKnowledgeMap).where(
                 QuestionKnowledgeMap.question_id == question_id
             )
-            mappings_to_delete = db.execute(delete_stmt).scalars().all()
-            for mapping in mappings_to_delete:
-                db.delete(mapping)
+            db.execute(delete_stmt)
 
             # 创建新映射
             for knowledge_id in request.knowledge_ids:
