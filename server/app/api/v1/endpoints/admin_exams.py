@@ -130,20 +130,20 @@ async def admin_regenerate_diagnostic_exam(
 ):
     """重新生成基线诊断考试"""
     try:
-        # 使用诊断生成服务生成考试
-        exam = generate_diagnostic_exam(
+        # 使用模板化组卷服务生成诊断考试
+        from ....services.paper_template import build_diagnostic_paper
+
+        paper, exam = build_diagnostic_paper(
             db=db,
-            created_by=current_user["id"],
-            per_top_kp=2,  # 每个一级知识点抽2道题
-            max_difficulty=2  # 最大难度为2
+            subject="XINGCE",  # 默认行测诊断
+            per_module=1,      # 每个模块至少1道题（测试用，生产环境可调整）
+            created_by=current_user["id"]
         )
 
-        db.commit()
-        db.refresh(exam)
-
+        # build_diagnostic_paper 已经提交了事务，这里不需要再提交
         return {
             "exam_id": exam.id,
-            "paper_id": exam.paper_id,
+            "paper_id": paper.id,
             "title": exam.title,
             "message": "基线诊断考试重新生成成功"
         }

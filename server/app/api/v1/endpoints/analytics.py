@@ -117,6 +117,92 @@ async def student_knowledge_state(limit: int = Query(6, ge=1, le=20), current_us
     return {"items": items}
 
 
+@router.get("/student/module-mastery")
+async def student_module_mastery(
+    subject: str = Query(..., description="科目类型：XINGCE 或 SHENLUN"),
+    current_user: dict = Depends(get_current_student),
+    db: Session = Depends(get_db)
+):
+    """
+    获取学生各模块的掌握度聚合数据（用于雷达图）
+
+    Args:
+        subject: 科目类型 ("XINGCE" 或 "SHENLUN")
+        current_user: 当前学生用户
+        db: 数据库会话
+
+    Returns:
+        dict: 包含subject和各模块掌握度数据的字典
+
+    Raises:
+        HTTPException: 当科目类型无效或查询失败时
+    """
+    try:
+        uid = current_user["id"]
+
+        # 验证subject参数
+        if subject not in ["XINGCE", "SHENLUN"]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="科目类型必须是 XINGCE 或 SHENLUN"
+            )
+
+        # 获取指定科目的模块节点
+        from ....services.paper_template import _get_subject_module_nodes, _get_knowledge_point_tree_ids
+
+        module_nodes = _get_subject_module_nodes(db, subject)
+        if not module_nodes:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"未找到{subject}科目的模块节点"
+            )
+
+        items = []
+
+        for module in module_nodes:
+            # 获取模块及其所有子知识点的ID
+            module_tree_ids = _get_knowledge_point_tree_ids(db, module.id)
+
+            if not module_tree_ids:
+                # 如果没有子节点，至少包含模块本身
+                module_tree_ids = [module.id]
+
+            # 计算该模块所有知识点的平均掌握度
+            avg_stmt = select(func.avg(UserKnowledgeState.mastery)).where(
+                UserKnowledgeState.user_id == uid,
+                UserKnowledgeState.knowledge_id.in_(module_tree_ids)
+            )
+            avg_mastery = db.execute(avg_stmt).scalar_one() or 0.0
+
+            # 转换为0-100百分制
+            mastery_percentage = round(float(avg_mastery) * 100, 1)
+
+            # 从模块code中提取简写（如XINGCE_QUANTITATIVE -> QUANTITATIVE）
+            module_code_short = module.code.split('_', 1)[-1] if '_' in module.code else module.code
+
+            items.append({
+                "module": module.name,
+                "code": module_code_short,
+                "mastery": mastery_percentage
+            })
+
+        # 按模块名称排序，确保返回结果的一致性
+        items.sort(key=lambda x: x["module"])
+
+        return {
+            "subject": subject,
+            "items": items
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"获取模块掌握度失败: {str(e)}"
+        )
+
+
 @router.get("/admin/overview")
 async def admin_overview(current_user: dict = Depends(get_current_admin), db: Session = Depends(get_db)):
     try:

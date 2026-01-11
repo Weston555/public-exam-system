@@ -102,19 +102,34 @@ async def generate_mock_exam(
 ):
     """生成个性化模拟考试"""
     try:
-        print(f"DEBUG: mock/generate called with count={request.count}, duration_minutes={request.duration_minutes}")
-        from ....services.mock_generator import generate_personalized_mock_exam
+        # 使用模板化组卷服务生成模拟考试
+        from ....services.paper_template import build_mock_paper
 
-        exam = generate_personalized_mock_exam(
+        # 根据题目数量计算比例（简化版：平均分配到5个模块）
+        total_questions = request.count
+        base_count = total_questions // 5
+        remainder = total_questions % 5
+
+        # 行测5个模块的简写
+        ratio = {
+            "XINGCE_QUANTITATIVE": base_count + (1 if remainder > 0 else 0),  # 数量关系
+            "XINGCE_LOGICAL": base_count + (1 if remainder > 1 else 0),      # 判断推理
+            "XINGCE_LANGUAGE": base_count + (1 if remainder > 2 else 0),     # 言语理解
+            "XINGCE_DATA": base_count + (1 if remainder > 3 else 0),         # 资料分析
+            "XINGCE_COMMON": base_count                                      # 常识判断
+        }
+
+        paper, exam = build_mock_paper(
             db=db,
-            user_id=current_user["id"],
-            count=request.count,
-            duration_minutes=request.duration_minutes
+            subject="XINGCE",
+            total=request.count,
+            ratio=ratio,
+            created_by=current_user["id"]
         )
 
         return {
             "exam_id": exam.id,
-            "paper_id": exam.paper_id,
+            "paper_id": paper.id,
             "count": request.count
         }
 
