@@ -55,14 +55,19 @@
         </el-col>
       </el-row>
 
-      <!-- 行测五模块掌握度雷达图 -->
+      <!-- 行测/申论模块掌握度雷达图 -->
       <el-row :gutter="20" style="margin-top: 20px;">
         <el-col :span="24">
           <el-card>
             <template #header>
               <div class="header-row">
-                <h4>行测五模块掌握度雷达图</h4>
-                <el-text type="info">展示行测五个模块的掌握情况</el-text>
+                <h4>公考模块掌握度雷达图</h4>
+                <div style="display: flex; align-items: center; gap: 16px;">
+                  <el-segmented v-model="subject" style="margin: 0;">
+                    <el-segmented-item label="行测（常识/言语/数量/判断/资料）" value="XINGCE" />
+                    <el-segmented-item label="申论（归纳/综合/对策/应用文/文章）" value="SHENLUN" />
+                  </el-segmented>
+                </div>
               </div>
             </template>
             <v-chart :option="radarOption" autoresize style="height:400px" v-if="radarOption"></v-chart>
@@ -76,7 +81,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useAuthStore } from '../../stores/auth'
 import BannerCarousel from '../../components/BannerCarousel.vue'
@@ -93,6 +98,7 @@ const overview = ref({ plan_completion_rate: 0, avg_mastery: 0, wrong_due_count:
 const scoreOption = ref(null)
 const masteryOption = ref(null)
 const radarOption = ref(null)
+const subject = ref('XINGCE')
 
 const loadOverview = async () => {
   try {
@@ -133,24 +139,19 @@ const loadMasteryTop = async () => {
   } catch (e) {}
 }
 
-const loadKnowledgeState = async () => {
+const loadModuleMastery = async () => {
   try {
-    // 优先调用新的模块掌握度API
-    let res = await authStore.api.get('/analytics/student/module-mastery?subject=XINGCE')
-    let items = res.data.items || []
-
-    if (!items.length) {
-      // 如果新接口没有数据，fallback到旧接口
-      console.warn('新模块掌握度接口无数据，尝试fallback到旧接口')
-      res = await authStore.api.get('/analytics/student/knowledge-state?limit=6')
-      items = res.data.items || []
-    }
+    // 调用模块掌握度API
+    const res = await authStore.api.get('/analytics/student/module-mastery', {
+      params: { subject: subject.value }
+    })
+    const items = res.data.items || []
 
     if (items.length) {
-      // 雷达图配置
+      // 雷达图配置 - 动态使用模块数据
       radarOption.value = {
         title: {
-          text: '行测五模块掌握度雷达图',
+          text: subject.value === 'XINGCE' ? '行测五模块掌握度雷达图' : '申论五题型掌握度雷达图',
           left: 'center'
         },
         tooltip: {
@@ -160,14 +161,10 @@ const loadKnowledgeState = async () => {
           }
         },
         radar: {
-          // 固定为5个模块维度
-          indicator: [
-            { name: '常识判断', max: 100 },
-            { name: '言语理解与表达', max: 100 },
-            { name: '数量关系', max: 100 },
-            { name: '判断推理', max: 100 },
-            { name: '资料分析', max: 100 }
-          ],
+          indicator: items.map(item => ({
+            name: `${item.module}(${item.code})`,
+            max: 100
+          })),
           center: ['50%', '50%'],
           radius: '60%'
         },
@@ -175,7 +172,7 @@ const loadKnowledgeState = async () => {
           name: '掌握度',
           type: 'radar',
           data: [{
-            value: items.length === 5 ? items.map(item => item.mastery) : [0, 0, 0, 0, 0], // 确保5个值
+            value: items.map(item => item.mastery),
             name: '掌握度',
             areaStyle: {
               opacity: 0.3
@@ -186,19 +183,27 @@ const loadKnowledgeState = async () => {
           }]
         }]
       }
+    } else {
+      radarOption.value = null
     }
   } catch (e) {
     // 接口失败时显示错误提示
     ElMessage.error('获取模块掌握度数据失败')
-    console.error('loadKnowledgeState error:', e)
+    console.error('loadModuleMastery error:', e)
+    radarOption.value = null
   }
 }
+
+// 监听科目切换
+watch(subject, () => {
+  loadModuleMastery()
+})
 
 onMounted(async () => {
   await loadOverview()
   await loadScoreTrend()
   await loadMasteryTop()
-  await loadKnowledgeState()
+  await loadModuleMastery()
 })
 </script>
 

@@ -1,18 +1,6 @@
 <template>
   <div class="home-view">
-    <el-card class="banner-card" shadow="never">
-      <el-carousel trigger="click" height="300px" :interval="5000">
-        <el-carousel-item v-for="item in banners" :key="item.id">
-          <div class="banner-box" :style="{ background: item.bg }">
-            <div class="banner-text">
-              <h1>{{ item.title }}</h1>
-              <p>{{ item.desc }}</p>
-              <el-button type="primary" round v-if="item.btn">{{ item.btn }}</el-button>
-            </div>
-          </div>
-        </el-carousel-item>
-      </el-carousel>
-    </el-card>
+    <BannerCarousel />
 
     <!-- 学习概览统计卡片 -->
     <el-row :gutter="20" style="margin-top: 20px;">
@@ -81,6 +69,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useAuthStore } from '../../stores/auth'
+import BannerCarousel from '../../components/BannerCarousel.vue'
 import { use } from 'echarts/core'
 import VChart from 'vue-echarts'
 import { CanvasRenderer } from 'echarts/renderers'
@@ -102,30 +91,6 @@ const overview = ref({
 const scoreTrendOption = ref(null)
 const radarOption = ref(null)
 
-// 轮播图数据
-const banners = ref([
-  {
-    id: 1,
-    title: '精准诊断，科学备考',
-    desc: '基于知识点图谱的个性化路径规划',
-    bg: 'linear-gradient(120deg, #84fab0 0%, #8fd3f4 100%)',
-    btn: '立即诊断'
-  },
-  {
-    id: 2,
-    title: '海量真题，智能推送',
-    desc: '覆盖行测、申论核心考点，难度自适应',
-    bg: 'linear-gradient(120deg, #a1c4fd 0%, #c2e9fb 100%)',
-    btn: null
-  },
-  {
-    id: 3,
-    title: '可视化数据分析',
-    desc: '全方位记录学习轨迹，看见每一分的成长',
-    bg: 'linear-gradient(120deg, #fccb90 0%, #d57eeb 100%)',
-    btn: '查看报表'
-  }
-])
 
 // 加载学习概览数据
 const loadOverview = async () => {

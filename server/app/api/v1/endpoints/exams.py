@@ -110,13 +110,13 @@ async def generate_mock_exam(
         base_count = total_questions // 5
         remainder = total_questions % 5
 
-        # 行测5个模块的简写
+        # ratio key 必须等于 KnowledgePoint.code，否则抽不到题
         ratio = {
-            "XINGCE_QUANTITATIVE": base_count + (1 if remainder > 0 else 0),  # 数量关系
-            "XINGCE_LOGICAL": base_count + (1 if remainder > 1 else 0),      # 判断推理
-            "XINGCE_LANGUAGE": base_count + (1 if remainder > 2 else 0),     # 言语理解
-            "XINGCE_DATA": base_count + (1 if remainder > 3 else 0),         # 资料分析
-            "XINGCE_COMMON": base_count                                      # 常识判断
+            "XINGCE_SL": base_count + (1 if remainder > 0 else 0),  # 数量关系
+            "XINGCE_PD": base_count + (1 if remainder > 1 else 0),  # 判断推理
+            "XINGCE_YY": base_count + (1 if remainder > 2 else 0),  # 言语理解与表达
+            "XINGCE_ZL": base_count + (1 if remainder > 3 else 0),  # 资料分析
+            "XINGCE_CS": base_count                                   # 常识判断
         }
 
         paper, exam = build_mock_paper(

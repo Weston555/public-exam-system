@@ -1,60 +1,75 @@
 #!/usr/bin/env python3
 """
-测试个性化模拟卷生成功能
+测试MOCK组卷功能 - 验证ratio key修复
 """
-
 import requests
+import sys
+import os
 
-BASE_URL = "http://localhost:8000/api/v1"
+# 添加服务器路径
+sys.path.append('server')
 
 def test_mock_generation():
-    print("🧪 测试个性化模拟卷生成")
+    print("🧪 测试MOCK组卷功能")
 
-    # 登录
-    login_resp = requests.post(f"{BASE_URL}/auth/login", json={
-        "username": "student01",
-        "password": "123456"
-    })
-    assert login_resp.status_code == 200
-    token = login_resp.json()["access_token"]
-    headers = {"Authorization": f"Bearer {token}"}
-    print("✅ 登录成功")
+    # 1. 登录获取token
+    try:
+        response = requests.post('http://localhost:8000/api/v1/auth/login', json={
+            'username': 'student01',
+            'password': '123456'
+        })
+        response.raise_for_status()
+        token = response.json()['access_token']
+        headers = {'Authorization': f'Bearer {token}'}
+        print("✅ 管理员登录成功")
+    except Exception as e:
+        print(f"❌ 登录失败: {e}")
+        return False
 
-    # 创建一些掌握度数据（模拟学习过程）
-    print("创建掌握度数据...")
-    # 这里我们可以手动创建一些UserKnowledgeState记录
-    # 为了简化测试，我们直接调用生成接口
+    # 2. 生成MOCK考试
+    try:
+        response = requests.post('http://localhost:8000/api/v1/exams/mock/generate',
+                               json={'count': 20, 'duration_minutes': 60},
+                               headers=headers)
+        response.raise_for_status()
+        data = response.json()
+        exam_id = data['exam_id']
+        paper_id = data['paper_id']
+        print(f"✅ 模拟卷生成成功: exam_id={exam_id}, paper_id={paper_id}")
+    except Exception as e:
+        print(f"❌ 模拟卷生成失败: {e}")
+        return False
 
-    # 生成个性化模拟卷
-    print("生成个性化模拟卷...")
-    mock_resp = requests.post(f"{BASE_URL}/exams/mock/generate", json={
-        "count": 5,  # 减少题目数量
-        "duration_minutes": 30
-    }, headers=headers)
+    # 3. 开始考试验证有题目
+    try:
+        response = requests.post(f'http://localhost:8000/api/v1/exams/{exam_id}/start',
+                               headers=headers)
+        response.raise_for_status()
+        attempt_data = response.json()
+        attempt_id = attempt_data['attempt_id']
 
-    if mock_resp.status_code == 200:
-        mock_data = mock_resp.json()
-        exam_id = mock_data["exam_id"]
-        print(f"✅ 模拟卷生成成功: exam_id={exam_id}")
+        # 获取第一道题目验证
+        response = requests.get(f'http://localhost:8000/api/v1/attempts/{attempt_id}',
+                               headers=headers)
+        response.raise_for_status()
+        attempt_detail = response.json()
 
-        # 开始考试
-        start_resp = requests.post(f"{BASE_URL}/exams/{exam_id}/start", headers=headers)
-        assert start_resp.status_code == 200
-        attempt_id = start_resp.json()["attempt_id"]
-        print(f"✅ 考试开始成功: attempt_id={attempt_id}")
+        questions = attempt_detail.get('questions', [])
+        if len(questions) > 0:
+            print(f"✅ 考试开始成功，获取到 {len(questions)} 道题目")
+            return True
+        else:
+            print("❌ 考试开始成功但没有题目")
+            return False
 
-        # 验证考试类别
-        exams_resp = requests.get(f"{BASE_URL}/exams?page=1&size=10", headers=headers)
-        if exams_resp.status_code == 200:
-            exams = exams_resp.json()["items"]
-            mock_exam = next((e for e in exams if e["id"] == exam_id), None)
-            if mock_exam:
-                assert mock_exam["category"] == "MOCK", f"考试类别错误: {mock_exam['category']}"
-                print("✅ 考试类别验证正确: MOCK")
+    except Exception as e:
+        print(f"❌ 考试开始失败: {e}")
+        return False
 
-        print("🎉 个性化模拟卷生成功能验证成功！")
+if __name__ == '__main__':
+    success = test_mock_generation()
+    if success:
+        print("\n🎉 MOCK组卷功能测试通过")
     else:
-        print(f"❌ 模拟卷生成失败: {mock_resp.status_code} - {mock_resp.text}")
-
-if __name__ == "__main__":
-    test_mock_generation()
+        print("\n💥 MOCK组卷功能测试失败")
+        sys.exit(1)
