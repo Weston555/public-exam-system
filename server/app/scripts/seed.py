@@ -36,7 +36,7 @@ def create_knowledge_tree(db: Session):
     # 创建根节点
     root = KnowledgePoint(
         name="公务员考试",
-        code="GONGKAO_ROOT",
+        code="GOV_EXAM",
         weight=1.0,
         estimated_minutes=0  # 根节点不需要时间
     )
@@ -44,125 +44,115 @@ def create_knowledge_tree(db: Session):
     db.flush()
     print(f"✅ 创建根节点: {root.name}")
 
-    # 行测模块
+    # 行测五模块（公考标准结构）
     xingce_modules = [
         {
-            "name": "数量关系",
-            "code": "XINGCE_QUANTITATIVE",
-            "weight": 1.2,
-            "estimated_minutes": 25,
+            "name": "常识判断",
+            "code": "XINGCE_CS",
+            "weight": 0.18,
+            "estimated_minutes": 35,
             "sub_points": [
-                {"name": "算术问题", "code": "XINGCE_QUANT_ARITHMETIC"},
-                {"name": "工程问题", "code": "XINGCE_QUANT_ENGINEERING"},
-                {"name": "行程问题", "code": "XINGCE_QUANT_TRAVEL"},
-                {"name": "比例问题", "code": "XINGCE_QUANT_RATIO"}
-            ]
-        },
-        {
-            "name": "判断推理",
-            "code": "XINGCE_LOGICAL",
-            "weight": 1.3,
-            "estimated_minutes": 30,
-            "sub_points": [
-                {"name": "图形推理", "code": "XINGCE_LOGIC_GRAPH"},
-                {"name": "定义判断", "code": "XINGCE_LOGIC_DEFINITION"},
-                {"name": "类比推理", "code": "XINGCE_LOGIC_ANALOGY"},
-                {"name": "逻辑判断", "code": "XINGCE_LOGIC_JUDGMENT"}
+                {"name": "政治常识", "code": "XINGCE_CS_POLITICS"},
+                {"name": "法律常识", "code": "XINGCE_CS_LAW"},
+                {"name": "人文常识", "code": "XINGCE_CS_HUMANITIES"}
             ]
         },
         {
             "name": "言语理解与表达",
-            "code": "XINGCE_LANGUAGE",
-            "weight": 1.1,
-            "estimated_minutes": 35,
+            "code": "XINGCE_YY",
+            "weight": 0.22,
+            "estimated_minutes": 45,
             "sub_points": [
-                {"name": "阅读理解", "code": "XINGCE_LANG_READING"},
-                {"name": "逻辑填空", "code": "XINGCE_LANG_BLANK"},
-                {"name": "语句表达", "code": "XINGCE_LANG_EXPRESSION"},
-                {"name": "病句辨析", "code": "XINGCE_LANG_GRAMMAR"}
+                {"name": "阅读理解", "code": "XINGCE_YY_READ"},
+                {"name": "逻辑填空", "code": "XINGCE_YY_BLANK"},
+                {"name": "语句表达", "code": "XINGCE_YY_EXPRESSION"}
+            ]
+        },
+        {
+            "name": "数量关系",
+            "code": "XINGCE_SL",
+            "weight": 0.20,
+            "estimated_minutes": 40,
+            "sub_points": [
+                {"name": "算术问题", "code": "XINGCE_SL_ARITHMETIC"},
+                {"name": "工程问题", "code": "XINGCE_SL_ENGINEERING"},
+                {"name": "行程问题", "code": "XINGCE_SL_TRAVEL"}
+            ]
+        },
+        {
+            "name": "判断推理",
+            "code": "XINGCE_PD",
+            "weight": 0.20,
+            "estimated_minutes": 40,
+            "sub_points": [
+                {"name": "图形推理", "code": "XINGCE_PD_GRAPH"},
+                {"name": "类比推理", "code": "XINGCE_PD_ANALOGY"},
+                {"name": "逻辑判断", "code": "XINGCE_PD_LOGIC"}
             ]
         },
         {
             "name": "资料分析",
-            "code": "XINGCE_DATA",
-            "weight": 1.4,
+            "code": "XINGCE_ZL",
+            "weight": 0.20,
             "estimated_minutes": 40,
             "sub_points": [
-                {"name": "文字资料", "code": "XINGCE_DATA_TEXT"},
-                {"name": "表格资料", "code": "XINGCE_DATA_TABLE"},
-                {"name": "图形资料", "code": "XINGCE_DATA_CHART"},
-                {"name": "综合资料", "code": "XINGCE_DATA_MIXED"}
-            ]
-        },
-        {
-            "name": "常识判断",
-            "code": "XINGCE_COMMON",
-            "weight": 0.8,
-            "estimated_minutes": 15,
-            "sub_points": [
-                {"name": "政治常识", "code": "XINGCE_COMMON_POLITICS"},
-                {"name": "法律常识", "code": "XINGCE_COMMON_LAW"},
-                {"name": "人文常识", "code": "XINGCE_COMMON_HUMANITIES"},
-                {"name": "科技常识", "code": "XINGCE_COMMON_SCIENCE"}
+                {"name": "文字资料", "code": "XINGCE_ZL_TEXT"},
+                {"name": "表格资料", "code": "XINGCE_ZL_TABLE"},
+                {"name": "图形资料", "code": "XINGCE_ZL_CHART"}
             ]
         }
     ]
 
-    # 申论模块
+    # 申论五题型（公考标准结构）
     shenlun_modules = [
         {
             "name": "归纳概括",
-            "code": "SHENLUN_SUMMARY",
-            "weight": 1.2,
-            "estimated_minutes": 25,
+            "code": "SHENLUN_GN",
+            "weight": 0.18,
+            "estimated_minutes": 35,
             "sub_points": [
-                {"name": "概括主题", "code": "SHENLUN_SUM_THEME"},
-                {"name": "提取要点", "code": "SHENLUN_SUM_POINTS"},
-                {"name": "总结观点", "code": "SHENLUN_SUM_VIEW"}
+                {"name": "概括主题", "code": "SHENLUN_GN_THEME"},
+                {"name": "提取要点", "code": "SHENLUN_GN_POINTS"}
             ]
         },
         {
             "name": "综合分析",
-            "code": "SHENLUN_ANALYSIS",
-            "weight": 1.3,
-            "estimated_minutes": 30,
+            "code": "SHENLUN_ZH",
+            "weight": 0.22,
+            "estimated_minutes": 45,
             "sub_points": [
-                {"name": "原因分析", "code": "SHENLUN_ANA_CAUSE"},
-                {"name": "影响分析", "code": "SHENLUN_ANA_IMPACT"},
-                {"name": "利弊分析", "code": "SHENLUN_ANA_PROS_CONS"}
+                {"name": "原因分析", "code": "SHENLUN_ZH_CAUSE"},
+                {"name": "影响分析", "code": "SHENLUN_ZH_IMPACT"}
             ]
         },
         {
             "name": "提出对策",
-            "code": "SHENLUN_SOLUTIONS",
-            "weight": 1.4,
-            "estimated_minutes": 35,
+            "code": "SHENLUN_DC",
+            "weight": 0.20,
+            "estimated_minutes": 40,
             "sub_points": [
-                {"name": "问题诊断", "code": "SHENLUN_SOL_DIAGNOSIS"},
-                {"name": "对策制定", "code": "SHENLUN_SOL_STRATEGY"},
-                {"name": "实施方案", "code": "SHENLUN_SOL_IMPLEMENT"}
+                {"name": "问题诊断", "code": "SHENLUN_DC_DIAGNOSIS"},
+                {"name": "对策制定", "code": "SHENLUN_DC_STRATEGY"}
             ]
         },
         {
             "name": "应用文写作",
-            "code": "SHENLUN_APPLICATION",
-            "weight": 1.1,
+            "code": "SHENLUN_YYW",
+            "weight": 0.20,
             "estimated_minutes": 40,
             "sub_points": [
-                {"name": "公文写作", "code": "SHENLUN_APP_OFFICIAL"},
-                {"name": "方案写作", "code": "SHENLUN_APP_PLAN"},
-                {"name": "报告写作", "code": "SHENLUN_APP_REPORT"}
+                {"name": "公文写作", "code": "SHENLUN_YYW_OFFICIAL"},
+                {"name": "方案写作", "code": "SHENLUN_YYW_PLAN"}
             ]
         },
         {
             "name": "文章写作",
-            "code": "SHENLUN_ESSAY",
-            "weight": 1.5,
-            "estimated_minutes": 45,
+            "code": "SHENLUN_WZ",
+            "weight": 0.20,
+            "estimated_minutes": 40,
             "sub_points": [
-                {"name": "审题立意", "code": "SHENLUN_ESS_TOPIC"},
-                {"name": "结构布局", "code": "SHENLUN_ESS_STRUCTURE"},
-                {"name": "语言表达", "code": "SHENLUN_ESS_LANGUAGE"}
+                {"name": "审题立意", "code": "SHENLUN_WZ_TOPIC"},
+                {"name": "结构布局", "code": "SHENLUN_WZ_STRUCTURE"}
             ]
         }
     ]
@@ -170,7 +160,7 @@ def create_knowledge_tree(db: Session):
     # 创建行测大类节点
     xingce_category = KnowledgePoint(
         name="行测",
-        code="XINGCE_CATEGORY",
+        code="XINGCE",
         parent_id=root.id,
         weight=1.0,
         estimated_minutes=0  # 大类节点不需要时间
@@ -182,7 +172,7 @@ def create_knowledge_tree(db: Session):
     # 创建申论大类节点
     shenlun_category = KnowledgePoint(
         name="申论",
-        code="SHENLUN_CATEGORY",
+        code="SHENLUN",
         parent_id=root.id,
         weight=1.0,
         estimated_minutes=0  # 大类节点不需要时间
@@ -202,7 +192,7 @@ def create_knowledge_tree(db: Session):
         )
         db.add(module_node)
         db.flush()
-        print(f"✅ 创建行测模块: {module_node.name}")
+        print(f"✅ 创建行测模块: {module_node.name} (权重: {module['weight']}, 时间: {module['estimated_minutes']}min)")
 
         # 创建子节点
         for sub_point in module["sub_points"]:
@@ -227,7 +217,7 @@ def create_knowledge_tree(db: Session):
         )
         db.add(module_node)
         db.flush()
-        print(f"✅ 创建申论模块: {module_node.name}")
+        print(f"✅ 创建申论题型: {module_node.name} (权重: {module['weight']}, 时间: {module['estimated_minutes']}min)")
 
         # 创建子节点
         for sub_point in module["sub_points"]:
@@ -256,12 +246,12 @@ def ensure_complete_tree(db: Session):
         return
 
     # 检查并创建大类节点
-    stmt = select(KnowledgePoint).where(KnowledgePoint.code == "XINGCE_CATEGORY")
+    stmt = select(KnowledgePoint).where(KnowledgePoint.code == "XINGCE")
     xingce_category = db.execute(stmt).scalar_one_or_none()
     if not xingce_category:
         xingce_category = KnowledgePoint(
             name="行测",
-            code="XINGCE_CATEGORY",
+            code="XINGCE",
             parent_id=root.id,
             weight=1.0,
             estimated_minutes=0
@@ -270,12 +260,12 @@ def ensure_complete_tree(db: Session):
         db.flush()
         print("✅ 补充行测大类节点")
 
-    stmt = select(KnowledgePoint).where(KnowledgePoint.code == "SHENLUN_CATEGORY")
+    stmt = select(KnowledgePoint).where(KnowledgePoint.code == "SHENLUN")
     shenlun_category = db.execute(stmt).scalar_one_or_none()
     if not shenlun_category:
         shenlun_category = KnowledgePoint(
             name="申论",
-            code="SHENLUN_CATEGORY",
+            code="SHENLUN",
             parent_id=root.id,
             weight=1.0,
             estimated_minutes=0
@@ -284,94 +274,84 @@ def ensure_complete_tree(db: Session):
         db.flush()
         print("✅ 补充申论大类节点")
 
-    # 定义完整的知识点结构
+    # 定义完整的知识点结构（与create_knowledge_tree保持一致）
     xingce_modules = [
         {
-            "name": "数量关系", "code": "XINGCE_QUANTITATIVE", "weight": 1.2, "estimated_minutes": 25,
+            "name": "常识判断", "code": "XINGCE_CS", "weight": 0.18, "estimated_minutes": 35,
             "sub_points": [
-                {"name": "算术问题", "code": "XINGCE_QUANT_ARITHMETIC"},
-                {"name": "工程问题", "code": "XINGCE_QUANT_ENGINEERING"},
-                {"name": "行程问题", "code": "XINGCE_QUANT_TRAVEL"},
-                {"name": "比例问题", "code": "XINGCE_QUANT_RATIO"}
+                {"name": "政治常识", "code": "XINGCE_CS_POLITICS"},
+                {"name": "法律常识", "code": "XINGCE_CS_LAW"},
+                {"name": "人文常识", "code": "XINGCE_CS_HUMANITIES"}
             ]
         },
         {
-            "name": "判断推理", "code": "XINGCE_LOGICAL", "weight": 1.3, "estimated_minutes": 30,
+            "name": "言语理解与表达", "code": "XINGCE_YY", "weight": 0.22, "estimated_minutes": 45,
             "sub_points": [
-                {"name": "图形推理", "code": "XINGCE_LOGIC_GRAPH"},
-                {"name": "定义判断", "code": "XINGCE_LOGIC_DEFINITION"},
-                {"name": "类比推理", "code": "XINGCE_LOGIC_ANALOGY"},
-                {"name": "逻辑判断", "code": "XINGCE_LOGIC_JUDGMENT"}
+                {"name": "阅读理解", "code": "XINGCE_YY_READ"},
+                {"name": "逻辑填空", "code": "XINGCE_YY_BLANK"},
+                {"name": "语句表达", "code": "XINGCE_YY_EXPRESSION"}
             ]
         },
         {
-            "name": "言语理解与表达", "code": "XINGCE_LANGUAGE", "weight": 1.1, "estimated_minutes": 35,
+            "name": "数量关系", "code": "XINGCE_SL", "weight": 0.20, "estimated_minutes": 40,
             "sub_points": [
-                {"name": "阅读理解", "code": "XINGCE_LANG_READING"},
-                {"name": "逻辑填空", "code": "XINGCE_LANG_BLANK"},
-                {"name": "语句表达", "code": "XINGCE_LANG_EXPRESSION"},
-                {"name": "病句辨析", "code": "XINGCE_LANG_GRAMMAR"}
+                {"name": "算术问题", "code": "XINGCE_SL_ARITHMETIC"},
+                {"name": "工程问题", "code": "XINGCE_SL_ENGINEERING"},
+                {"name": "行程问题", "code": "XINGCE_SL_TRAVEL"}
             ]
         },
         {
-            "name": "资料分析", "code": "XINGCE_DATA", "weight": 1.4, "estimated_minutes": 40,
+            "name": "判断推理", "code": "XINGCE_PD", "weight": 0.20, "estimated_minutes": 40,
             "sub_points": [
-                {"name": "文字资料", "code": "XINGCE_DATA_TEXT"},
-                {"name": "表格资料", "code": "XINGCE_DATA_TABLE"},
-                {"name": "图形资料", "code": "XINGCE_DATA_CHART"},
-                {"name": "综合资料", "code": "XINGCE_DATA_MIXED"}
+                {"name": "图形推理", "code": "XINGCE_PD_GRAPH"},
+                {"name": "类比推理", "code": "XINGCE_PD_ANALOGY"},
+                {"name": "逻辑判断", "code": "XINGCE_PD_LOGIC"}
             ]
         },
         {
-            "name": "常识判断", "code": "XINGCE_COMMON", "weight": 0.8, "estimated_minutes": 15,
+            "name": "资料分析", "code": "XINGCE_ZL", "weight": 0.20, "estimated_minutes": 40,
             "sub_points": [
-                {"name": "政治常识", "code": "XINGCE_COMMON_POLITICS"},
-                {"name": "法律常识", "code": "XINGCE_COMMON_LAW"},
-                {"name": "人文常识", "code": "XINGCE_COMMON_HUMANITIES"},
-                {"name": "科技常识", "code": "XINGCE_COMMON_SCIENCE"}
+                {"name": "文字资料", "code": "XINGCE_ZL_TEXT"},
+                {"name": "表格资料", "code": "XINGCE_ZL_TABLE"},
+                {"name": "图形资料", "code": "XINGCE_ZL_CHART"}
             ]
         }
     ]
 
     shenlun_modules = [
         {
-            "name": "归纳概括", "code": "SHENLUN_SUMMARY", "weight": 1.2, "estimated_minutes": 25,
+            "name": "归纳概括", "code": "SHENLUN_GN", "weight": 0.18, "estimated_minutes": 35,
             "sub_points": [
-                {"name": "概括主题", "code": "SHENLUN_SUM_THEME"},
-                {"name": "提取要点", "code": "SHENLUN_SUM_POINTS"},
-                {"name": "总结观点", "code": "SHENLUN_SUM_VIEW"}
+                {"name": "概括主题", "code": "SHENLUN_GN_THEME"},
+                {"name": "提取要点", "code": "SHENLUN_GN_POINTS"}
             ]
         },
         {
-            "name": "综合分析", "code": "SHENLUN_ANALYSIS", "weight": 1.3, "estimated_minutes": 30,
+            "name": "综合分析", "code": "SHENLUN_ZH", "weight": 0.22, "estimated_minutes": 45,
             "sub_points": [
-                {"name": "原因分析", "code": "SHENLUN_ANA_CAUSE"},
-                {"name": "影响分析", "code": "SHENLUN_ANA_IMPACT"},
-                {"name": "利弊分析", "code": "SHENLUN_ANA_PROS_CONS"}
+                {"name": "原因分析", "code": "SHENLUN_ZH_CAUSE"},
+                {"name": "影响分析", "code": "SHENLUN_ZH_IMPACT"}
             ]
         },
         {
-            "name": "提出对策", "code": "SHENLUN_SOLUTIONS", "weight": 1.4, "estimated_minutes": 35,
+            "name": "提出对策", "code": "SHENLUN_DC", "weight": 0.20, "estimated_minutes": 40,
             "sub_points": [
-                {"name": "问题诊断", "code": "SHENLUN_SOL_DIAGNOSIS"},
-                {"name": "对策制定", "code": "SHENLUN_SOL_STRATEGY"},
-                {"name": "实施方案", "code": "SHENLUN_SOL_IMPLEMENT"}
+                {"name": "问题诊断", "code": "SHENLUN_DC_DIAGNOSIS"},
+                {"name": "对策制定", "code": "SHENLUN_DC_STRATEGY"}
             ]
         },
         {
-            "name": "应用文写作", "code": "SHENLUN_APPLICATION", "weight": 1.1, "estimated_minutes": 40,
+            "name": "应用文写作", "code": "SHENLUN_YYW", "weight": 0.20, "estimated_minutes": 40,
             "sub_points": [
-                {"name": "公文写作", "code": "SHENLUN_APP_OFFICIAL"},
-                {"name": "方案写作", "code": "SHENLUN_APP_PLAN"},
-                {"name": "报告写作", "code": "SHENLUN_APP_REPORT"}
+                {"name": "公文写作", "code": "SHENLUN_YYW_OFFICIAL"},
+                {"name": "方案写作", "code": "SHENLUN_YYW_PLAN"}
             ]
         },
         {
-            "name": "文章写作", "code": "SHENLUN_ESSAY", "weight": 1.5, "estimated_minutes": 45,
+            "name": "文章写作", "code": "SHENLUN_WZ", "weight": 0.20, "estimated_minutes": 40,
             "sub_points": [
-                {"name": "审题立意", "code": "SHENLUN_ESS_TOPIC"},
-                {"name": "结构布局", "code": "SHENLUN_ESS_STRUCTURE"},
-                {"name": "语言表达", "code": "SHENLUN_ESS_LANGUAGE"}
+                {"name": "审题立意", "code": "SHENLUN_WZ_TOPIC"},
+                {"name": "结构布局", "code": "SHENLUN_WZ_STRUCTURE"}
             ]
         }
     ]
@@ -420,7 +400,7 @@ def ensure_complete_tree(db: Session):
             )
             db.add(module_node)
             db.flush()
-            print(f"✅ 补充申论模块: {module['name']}")
+            print(f"✅ 补充申论题型: {module['name']}")
 
         # 补充子节点
         for sub_point in module["sub_points"]:
@@ -486,19 +466,21 @@ def seed_database():
                     stmt = select(KnowledgePoint)
                     knowledge_points = db.execute(stmt).scalars().all()
                     for kp in knowledge_points:
-                        # 为不同知识点设置不同的掌握度（模拟真实学习情况）
-                        if kp.name == "数量关系":
+                        # 为不同知识点设置不同的掌握度（基于code设置，模拟真实学习情况）
+                        if kp.code.startswith("XINGCE_SL"):  # 数量关系
                             mastery = 0.4  # 40% - 较薄弱
-                        elif kp.name == "判断推理":
+                        elif kp.code.startswith("XINGCE_PD"):  # 判断推理
                             mastery = 0.6  # 60% - 中等
-                        elif kp.name == "阅读理解":
-                            mastery = 0.8  # 80% - 较好
-                        elif kp.name == "行测":
+                        elif kp.code.startswith("XINGCE_YY"):  # 言语理解与表达
                             mastery = 0.5  # 50% - 中等
-                        elif kp.name == "申论":
+                        elif kp.code == "XINGCE":  # 行测大类
+                            mastery = 0.5  # 50% - 中等
+                        elif kp.code.startswith("SHENLUN"):  # 申论相关
+                            mastery = 0.7  # 70% - 良好
+                        elif kp.code == "SHENLUN":  # 申论大类
                             mastery = 0.7  # 70% - 良好
                         else:
-                            mastery = 0.3  # 30% - 很薄弱
+                            mastery = 0.3  # 30% - 默认掌握度
 
                         user_knowledge_state = UserKnowledgeState(
                             user_id=user.id,
@@ -515,11 +497,11 @@ def seed_database():
         # 创建测试题目
         if db.execute(select(func.count()).select_from(Question)).scalar() == 0:
             # 获取知识点ID
-            stmt = select(KnowledgePoint).where(KnowledgePoint.code == "XINGCE_QUANTITATIVE")
+            stmt = select(KnowledgePoint).where(KnowledgePoint.code == "XINGCE_SL")
             quantitative = db.execute(stmt).scalar_one_or_none()
-            stmt = select(KnowledgePoint).where(KnowledgePoint.code == "XINGCE_LOGICAL")
+            stmt = select(KnowledgePoint).where(KnowledgePoint.code == "XINGCE_PD")
             logical = db.execute(stmt).scalar_one_or_none()
-            stmt = select(KnowledgePoint).where(KnowledgePoint.code == "XINGCE_LANGUAGE")
+            stmt = select(KnowledgePoint).where(KnowledgePoint.code == "XINGCE_YY")
             language = db.execute(stmt).scalar_one_or_none()
 
             questions_data = [

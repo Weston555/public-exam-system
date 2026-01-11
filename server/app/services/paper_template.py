@@ -338,9 +338,9 @@ def _get_subject_module_nodes(db: Session, subject: str) -> List[KnowledgePoint]
     """获取指定科目的模块节点"""
     # 根据subject找到对应的分类节点
     if subject == "XINGCE":
-        category_code = "XINGCE_CATEGORY"
+        category_code = "XINGCE"
     elif subject == "SHENLUN":
-        category_code = "SHENLUN_CATEGORY"
+        category_code = "SHENLUN"
     else:
         return []
 

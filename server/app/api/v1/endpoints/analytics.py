@@ -177,8 +177,15 @@ async def student_module_mastery(
             # 转换为0-100百分制
             mastery_percentage = round(float(avg_mastery) * 100, 1)
 
-            # 从模块code中提取简写（如XINGCE_QUANTITATIVE -> QUANTITATIVE）
-            module_code_short = module.code.split('_', 1)[-1] if '_' in module.code else module.code
+            # 从模块code中提取简写（如XINGCE_CS -> CS, XINGCE_YY -> YY）
+            if '_' in module.code:
+                parts = module.code.split('_')
+                if len(parts) >= 2:
+                    module_code_short = parts[1]  # XINGCE_CS -> CS
+                else:
+                    module_code_short = module.code
+            else:
+                module_code_short = module.code
 
             items.append({
                 "module": module.name,
