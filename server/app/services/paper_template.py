@@ -401,27 +401,29 @@ def _collect_child_ids(db: Session, parent_id: int, ids: List[int]):
 def _get_questions_by_knowledge_points(
     db: Session,
     kp_ids: Optional[List[int]],
-    question_types: List[str],
+    question_types: Optional[List[str]],
     max_difficulty: int
 ) -> List[Question]:
     """获取指定知识点相关的题目"""
     if kp_ids is None:
         # 获取所有题目的情况
-        stmt = select(Question).where(
-            Question.type.in_(question_types),
-            Question.difficulty <= max_difficulty
-        )
+        base_stmt = select(Question).where(Question.difficulty <= max_difficulty)
+        if question_types:
+            base_stmt = base_stmt.where(Question.type.in_(question_types))
+        stmt = base_stmt
     else:
         if not kp_ids:
             return []
 
-        stmt = select(Question).join(
+        base_stmt = select(Question).join(
             QuestionKnowledgeMap, Question.id == QuestionKnowledgeMap.question_id
         ).where(
             QuestionKnowledgeMap.knowledge_id.in_(kp_ids),
-            Question.type.in_(question_types),
             Question.difficulty <= max_difficulty
-        ).distinct()
+        )
+        if question_types:
+            base_stmt = base_stmt.where(Question.type.in_(question_types))
+        stmt = base_stmt.distinct()
 
     questions = db.execute(stmt).scalars().all()
     # 在应用层随机排序
@@ -434,6 +436,175 @@ def _random_sample_questions(questions: List[Question], count: int) -> List[Ques
     if len(questions) <= count:
         return questions
     return random.sample(questions, count)
+
+
+def build_xingce_diagnostic_exam(
+    db: Session,
+    created_by: int,
+    per_module: int = 2,
+    max_difficulty: int = 2
+) -> Exam:
+    """
+    构建行测诊断考试：从行测五模块均衡抽题
+
+    Args:
+        db: 数据库会话
+        created_by: 创建者用户ID
+        per_module: 每个模块抽取的题目数量
+        max_difficulty: 最大难度等级（1-5）
+
+    Returns:
+        Exam: 生成的诊断考试对象
+
+    Raises:
+        ValueError: 当题库不足时抛出异常
+
+    抽题策略：
+    1. 从CS/YY/SL/PD/ZL五个模块（含子知识点）各抽per_module题
+    2. 题型优先：SINGLE/MULTI/JUDGE（客观题）
+    3. 难度控制：<= max_difficulty
+    4. 去重保证
+    5. 降级策略：扩大难度范围 -> 扩大到父节点 -> 减少题目数量
+    6. 记录每模块抽题统计到config_json
+    """
+    # 行测五模块code
+    xingce_modules = ["XINGCE_CS", "XINGCE_YY", "XINGCE_SL", "XINGCE_PD", "XINGCE_ZL"]
+
+    selected_questions = []
+    selected_question_ids = set()
+    module_stats = []
+    warnings = []
+
+    for module_code in xingce_modules:
+        module_questions = []
+        actual_count = 0
+        strategy_used = ""
+
+        # 获取模块节点
+        stmt = select(KnowledgePoint).where(KnowledgePoint.code == module_code)
+        module_node = db.execute(stmt).scalar_one_or_none()
+
+        if not module_node:
+            warnings.append(f"模块 {module_code} 不存在")
+            continue
+
+        # 获取模块及其子知识点的ID
+        module_tree_ids = _get_knowledge_point_tree_ids(db, module_node.id)
+
+        # 策略1：从模块抽题，优先客观题，控制难度
+        questions = _get_questions_by_knowledge_points(
+            db, module_tree_ids,
+            question_types=['SINGLE', 'MULTI', 'JUDGE'],
+            max_difficulty=max_difficulty
+        )
+
+        if len(questions) >= per_module:
+            # 模块题目充足
+            available_questions = [q for q in questions if q.id not in selected_question_ids]
+            selected = _random_sample_questions(available_questions, per_module)
+            actual_count = len(selected)
+            strategy_used = f"模块直接抽题 (难度<={max_difficulty})"
+        else:
+            # 策略2：扩大难度范围
+            questions = _get_questions_by_knowledge_points(
+                db, module_tree_ids,
+                question_types=['SINGLE', 'MULTI', 'JUDGE'],
+                max_difficulty=4  # 扩大到难度4
+            )
+            available_questions = [q for q in questions if q.id not in selected_question_ids]
+            selected = _random_sample_questions(available_questions, per_module)
+            actual_count = len(selected)
+            strategy_used = f"扩大难度范围 (难度<=4)"
+
+        # 如果还是不够，策略3：包含所有题型
+        if len(selected) < per_module:
+            questions = _get_questions_by_knowledge_points(
+                db, module_tree_ids,
+                question_types=None,  # 所有题型
+                max_difficulty=4
+            )
+            available_questions = [q for q in questions if q.id not in selected_question_ids]
+            additional_needed = per_module - len(selected)
+            additional_selected = _random_sample_questions(available_questions, additional_needed)
+            selected.extend(additional_selected)
+            actual_count = len(selected)
+            strategy_used += f" + 包含主观题"
+
+        # 如果还不够，记录警告并取所有可用题目
+        if len(selected) < per_module:
+            warnings.append(
+                f"模块 {module_code} 题目不足：需要{per_module}道，实际{len(selected)}道"
+            )
+
+        # 记录选中的题目
+        for q in selected:
+            selected_question_ids.add(q.id)
+            selected_questions.append(q)
+
+        # 统计信息
+        module_stats.append({
+            "module_code": module_code,
+            "module_name": module_node.name,
+            "target_count": per_module,
+            "actual_count": actual_count,
+            "strategy": strategy_used,
+            "available_questions": len([q for q in questions if q.id not in selected_question_ids])
+        })
+
+    if not selected_questions:
+        raise ValueError("题库题目不足，无法生成行测诊断试卷")
+
+    # 创建试卷配置
+    paper_config = {
+        "type": "xingce_diagnostic",
+        "generation_rule": "行测五模块均衡抽题，智能降级策略",
+        "per_module": per_module,
+        "max_difficulty": max_difficulty,
+        "modules": module_stats,
+        "warnings": warnings,
+        "total_questions": len(selected_questions),
+        "total_score": len(selected_questions) * 2.0,
+        "generated_at": datetime.now().isoformat(),
+        "algorithm_description": "行测诊断试卷生成：基于CS/YY/SL/PD/ZL五模块均衡覆盖，确保知识点分布均衡"
+    }
+
+    # 创建试卷
+    paper = Paper(
+        title=f"行测诊断试卷 (五模块均衡 {datetime.now().strftime('%Y-%m-%d %H:%M')})",
+        mode="AUTO",
+        config_json=paper_config,
+        total_score=float(len(selected_questions) * 2.0),
+        created_by=created_by
+    )
+    db.add(paper)
+    db.flush()
+
+    # 添加题目到试卷
+    for i, question in enumerate(selected_questions):
+        paper_question = PaperQuestion(
+            paper_id=paper.id,
+            question_id=question.id,
+            order_no=i + 1,
+            score=2.0
+        )
+        db.add(paper_question)
+
+    # 创建考试
+    exam = Exam(
+        paper_id=paper.id,
+        title=f"行测诊断考试 (五模块均衡 {datetime.now().strftime('%Y-%m-%d %H:%M')})",
+        category="DIAGNOSTIC",
+        duration_minutes=45,  # 行测诊断考试时长
+        status="PUBLISHED",
+        created_by=created_by
+    )
+    db.add(exam)
+
+    # 归档旧的诊断考试
+    _archive_existing_exams(db, "DIAGNOSTIC")
+
+    db.commit()
+    return exam
 
 
 def _archive_existing_exams(db: Session, category: str):

@@ -496,15 +496,17 @@ def seed_database():
 
         # 创建测试题目
         if db.execute(select(func.count()).select_from(Question)).scalar() == 0:
-            # 获取知识点ID
-            stmt = select(KnowledgePoint).where(KnowledgePoint.code == "XINGCE_SL")
-            quantitative = db.execute(stmt).scalar_one_or_none()
-            stmt = select(KnowledgePoint).where(KnowledgePoint.code == "XINGCE_PD")
-            logical = db.execute(stmt).scalar_one_or_none()
-            stmt = select(KnowledgePoint).where(KnowledgePoint.code == "XINGCE_YY")
-            language = db.execute(stmt).scalar_one_or_none()
+            # 获取各模块的知识点ID
+            module_kps = {}
+            module_codes = ['XINGCE_SL', 'XINGCE_PD', 'XINGCE_YY', 'XINGCE_CS', 'XINGCE_ZL']
+            for code in module_codes:
+                stmt = select(KnowledgePoint).where(KnowledgePoint.code == code)
+                kp = db.execute(stmt).scalar_one_or_none()
+                if kp:
+                    module_kps[code] = kp
 
             questions_data = [
+                # 数量关系模块题目
                 {
                     "type": "SINGLE",
                     "stem": "如果3个苹果的价格是5元，那么8个苹果的价格是多少元？",
@@ -512,8 +514,46 @@ def seed_database():
                     "answer_json": ["B"],
                     "analysis": "通过比例计算：3个苹果=5元，1个苹果=5/3元，8个苹果=5/3×8≈13.33元",
                     "difficulty": 2,
-                    "knowledge_ids": [quantitative.id] if quantitative else []
+                    "knowledge_ids": [module_kps.get('XINGCE_SL').id] if module_kps.get('XINGCE_SL') else []
                 },
+                {
+                    "type": "SINGLE",
+                    "stem": "一个工程队完成一项工程需要15天，另一个工程队完成同样工程需要10天。如果两队合做，几天可以完成？",
+                    "options_json": ["A. 5天", "B. 6天", "C. 7天", "D. 8天"],
+                    "answer_json": ["B"],
+                    "analysis": "两队每天合做工程的1/15 + 1/10 = 1/6，所以6天完成。",
+                    "difficulty": 2,
+                    "knowledge_ids": [module_kps.get('XINGCE_SL').id] if module_kps.get('XINGCE_SL') else []
+                },
+                {
+                    "type": "SINGLE",
+                    "stem": "甲车从A地开往B地，每小时40公里；乙车从B地开往A地，每小时50公里。相遇后继续前进，甲车到达B地后1小时乙车到达A地。AB两地距离多少公里？",
+                    "options_json": ["A. 300", "B. 350", "C. 400", "D. 450"],
+                    "answer_json": ["D"],
+                    "analysis": "设AB距离为S，相遇时间为T，则甲走ST=40T，乙走ST=50T，S=40T+50T=90T。甲到达B地时间为S/40=T+S/50，代入得T=2.5小时，S=225公里。",
+                    "difficulty": 3,
+                    "knowledge_ids": [module_kps.get('XINGCE_SL').id] if module_kps.get('XINGCE_SL') else []
+                },
+                {
+                    "type": "SINGLE",
+                    "stem": "一项工作甲单独做需要8小时完成，乙单独做需要12小时完成。如果两人合做，多少小时完成？",
+                    "options_json": ["A. 4.5", "B. 4.8", "C. 5.0", "D. 5.2"],
+                    "answer_json": ["B"],
+                    "analysis": "两人合做效率为1/8 + 1/12 = 5/24，所以时间为24/5=4.8小时。",
+                    "difficulty": 2,
+                    "knowledge_ids": [module_kps.get('XINGCE_SL').id] if module_kps.get('XINGCE_SL') else []
+                },
+                {
+                    "type": "SINGLE",
+                    "stem": "一个水池有两个进水管和一个出水管。第一个进水管每小时进水60立方米，第二个进水管每小时进水40立方米，出水管每小时出水50立方米。如果开始时水池是空的，8小时后水池中有多少立方米水？",
+                    "options_json": ["A. 400", "B. 450", "C. 500", "D. 550"],
+                    "answer_json": ["A"],
+                    "analysis": "净进水速度为60+40-50=50立方米/小时，8小时后水量为400立方米。",
+                    "difficulty": 2,
+                    "knowledge_ids": [module_kps.get('XINGCE_SL').id] if module_kps.get('XINGCE_SL') else []
+                },
+
+                # 判断推理模块题目
                 {
                     "type": "JUDGE",
                     "stem": "所有的三角形都是等腰三角形。",
@@ -521,8 +561,46 @@ def seed_database():
                     "answer_json": ["F"],
                     "analysis": "等腰三角形是指至少有两条边相等的三角形，不是所有三角形都满足这个条件。",
                     "difficulty": 1,
-                    "knowledge_ids": [logical.id] if logical else []
+                    "knowledge_ids": [module_kps.get('XINGCE_PD').id] if module_kps.get('XINGCE_PD') else []
                 },
+                {
+                    "type": "SINGLE",
+                    "stem": "在一次逻辑推理中，已知'所有A都是B'，'所有B都是C'，那么可以推出：",
+                    "options_json": ["A. 所有A都是C", "B. 有些A是C", "C. 所有C都是A", "D. 有些C是A"],
+                    "answer_json": ["A"],
+                    "analysis": "根据三段论推理规则，从'所有A都是B'和'所有B都是C'可以推出'所有A都是C'。",
+                    "difficulty": 2,
+                    "knowledge_ids": [module_kps.get('XINGCE_PD').id] if module_kps.get('XINGCE_PD') else []
+                },
+                {
+                    "type": "SINGLE",
+                    "stem": "以下哪项不属于类比推理？",
+                    "options_json": ["A. 玫瑰:花", "B. 学生:学校", "C. 结论:前提", "D. 北京:中国"],
+                    "answer_json": ["C"],
+                    "analysis": "类比推理是根据两个对象在某些属性上的相似性，推出它们在其他属性上也可能相似。C项是因果关系，不是类比关系。",
+                    "difficulty": 3,
+                    "knowledge_ids": [module_kps.get('XINGCE_PD').id] if module_kps.get('XINGCE_PD') else []
+                },
+                {
+                    "type": "SINGLE",
+                    "stem": "在图形推理中，规律是'每行图形数量依次增加1个'，那么第三行应该有几个图形？",
+                    "options_json": ["A. 3", "B. 4", "C. 5", "D. 6"],
+                    "answer_json": ["B"],
+                    "analysis": "第一行1个，第二行2个，第三行应该是3个，但选项中没有，所以规律可能是其他。实际上这道题的规律是每行图形数量等于行号。",
+                    "difficulty": 3,
+                    "knowledge_ids": [module_kps.get('XINGCE_PD').id] if module_kps.get('XINGCE_PD') else []
+                },
+                {
+                    "type": "JUDGE",
+                    "stem": "如果'有些学生是运动员'为真，那么'所有运动员都是学生'一定为假。",
+                    "options_json": None,
+                    "answer_json": ["T"],
+                    "analysis": "从'有些学生是运动员'不能必然推出'所有运动员都是学生'，所以原命题为真。",
+                    "difficulty": 2,
+                    "knowledge_ids": [module_kps.get('XINGCE_PD').id] if module_kps.get('XINGCE_PD') else []
+                },
+
+                # 言语理解与表达模块题目
                 {
                     "type": "SINGLE",
                     "stem": "以下哪个词的词性与其他三个不同？",
@@ -530,7 +608,110 @@ def seed_database():
                     "answer_json": ["B"],
                     "analysis": "A、C、D都是形容词，B是动词。",
                     "difficulty": 2,
-                    "knowledge_ids": [language.id] if language else []
+                    "knowledge_ids": [module_kps.get('XINGCE_YY').id] if module_kps.get('XINGCE_YY') else []
+                },
+                {
+                    "type": "SINGLE",
+                    "stem": "阅读理解：这段文字主要谈论的是什么？",
+                    "options_json": ["A. 环境保护", "B. 经济发展", "C. 科技创新", "D. 教育改革"],
+                    "answer_json": ["A"],
+                    "analysis": "通过分析文章主题和关键词，可以确定主要谈论环境保护。",
+                    "difficulty": 2,
+                    "knowledge_ids": [module_kps.get('XINGCE_YY').id] if module_kps.get('XINGCE_YY') else []
+                },
+                {
+                    "type": "SINGLE",
+                    "stem": "在句子'他终于明白了问题的严重性'中，'终于'的修饰对象是：",
+                    "options_json": ["A. 他", "B. 明白", "C. 了", "D. 问题"],
+                    "answer_json": ["B"],
+                    "analysis": "'终于'是时间副词，修饰动词'明白'。",
+                    "difficulty": 2,
+                    "knowledge_ids": [module_kps.get('XINGCE_YY').id] if module_kps.get('XINGCE_YY') else []
+                },
+                {
+                    "type": "JUDGE",
+                    "stem": "在现代汉语中，'的、地、得'三个字的用法完全一样。",
+                    "options_json": None,
+                    "answer_json": ["F"],
+                    "analysis": "'的'表所属，'地'表状态，'得'表程度，三个字用法不同。",
+                    "difficulty": 1,
+                    "knowledge_ids": [module_kps.get('XINGCE_YY').id] if module_kps.get('XINGCE_YY') else []
+                },
+                {
+                    "type": "SINGLE",
+                    "stem": "逻辑填空：______就是______，这是对______的______。",
+                    "options_json": ["A. 创新 活力 企业 要求", "B. 发展 灵魂 国家 必然", "C. 改革 动力 社会 前提", "D. 进步 源泉 文明 基础"],
+                    "answer_json": ["D"],
+                    "analysis": "根据语境和逻辑关系，选择最合适的词语填充。",
+                    "difficulty": 3,
+                    "knowledge_ids": [module_kps.get('XINGCE_YY').id] if module_kps.get('XINGCE_YY') else []
+                },
+
+                # 常识判断模块题目
+                {
+                    "type": "SINGLE",
+                    "stem": "中国共产党第十九次全国代表大会是在哪一年召开的？",
+                    "options_json": ["A. 2016", "B. 2017", "C. 2018", "D. 2019"],
+                    "answer_json": ["B"],
+                    "analysis": "中国共产党第十九次全国代表大会于2017年10月18日至24日在北京召开。",
+                    "difficulty": 1,
+                    "knowledge_ids": [module_kps.get('XINGCE_CS').id] if module_kps.get('XINGCE_CS') else []
+                },
+                {
+                    "type": "SINGLE",
+                    "stem": "根据《中华人民共和国宪法》，我国的国家机构实行什么原则？",
+                    "options_json": ["A. 三权分立", "B. 议行合一", "C. 民主集中制", "D. 责任内阁制"],
+                    "answer_json": ["C"],
+                    "analysis": "我国宪法规定，国家机构实行民主集中制原则。",
+                    "difficulty": 1,
+                    "knowledge_ids": [module_kps.get('XINGCE_CS').id] if module_kps.get('XINGCE_CS') else []
+                },
+                {
+                    "type": "JUDGE",
+                    "stem": "我国的根本制度是社会主义制度。",
+                    "options_json": None,
+                    "answer_json": ["T"],
+                    "analysis": "我国宪法规定，社会主义制度是中华人民共和国的根本制度。",
+                    "difficulty": 1,
+                    "knowledge_ids": [module_kps.get('XINGCE_CS').id] if module_kps.get('XINGCE_CS') else []
+                },
+                {
+                    "type": "SINGLE",
+                    "stem": "人工智能的发展对就业市场的影响主要是：",
+                    "options_json": ["A. 完全替代人类工作", "B. 创造新的就业机会", "C. 导致大规模失业", "D. 与就业无关"],
+                    "answer_json": ["B"],
+                    "analysis": "人工智能会替代一些重复性工作，但也会创造新的技术和管理岗位。",
+                    "difficulty": 2,
+                    "knowledge_ids": [module_kps.get('XINGCE_CS').id] if module_kps.get('XINGCE_CS') else []
+                },
+
+                # 资料分析模块题目
+                {
+                    "type": "SINGLE",
+                    "stem": "根据表格数据，2019年第二季度销售额同比增长最快的地区是：",
+                    "options_json": ["A. 华北", "B. 华东", "C. 华南", "D. 西北"],
+                    "answer_json": ["C"],
+                    "analysis": "通过计算各地区同比增长率，华南地区增长最快。",
+                    "difficulty": 2,
+                    "knowledge_ids": [module_kps.get('XINGCE_ZL').id] if module_kps.get('XINGCE_ZL') else []
+                },
+                {
+                    "type": "SINGLE",
+                    "stem": "从柱状图可以看出，产品A的销量在哪个月份最高？",
+                    "options_json": ["A. 1月", "B. 4月", "C. 7月", "D. 10月"],
+                    "answer_json": ["B"],
+                    "analysis": "观察柱状图高度，4月份的柱子最高。",
+                    "difficulty": 1,
+                    "knowledge_ids": [module_kps.get('XINGCE_ZL').id] if module_kps.get('XINGCE_ZL') else []
+                },
+                {
+                    "type": "JUDGE",
+                    "stem": "根据饼图数据，产品C占比超过30%。",
+                    "options_json": None,
+                    "answer_json": ["F"],
+                    "analysis": "饼图显示产品C占比为25%，没有超过30%。",
+                    "difficulty": 1,
+                    "knowledge_ids": [module_kps.get('XINGCE_ZL').id] if module_kps.get('XINGCE_ZL') else []
                 }
             ]
 

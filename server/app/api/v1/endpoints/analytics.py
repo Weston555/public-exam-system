@@ -193,8 +193,13 @@ async def student_module_mastery(
                 "mastery": mastery_percentage
             })
 
-        # 按模块名称排序，确保返回结果的一致性
-        items.sort(key=lambda x: x["module"])
+        # 按固定顺序排序：CS, YY, SL, PD, ZL
+        if subject == "XINGCE":
+            order = {"CS": 0, "YY": 1, "SL": 2, "PD": 3, "ZL": 4}
+            items.sort(key=lambda x: order.get(x["code"], 999))
+        else:
+            # SHENLUN保持原有排序
+            items.sort(key=lambda x: x["module"])
 
         return {
             "subject": subject,

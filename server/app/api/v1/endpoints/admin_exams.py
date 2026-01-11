@@ -130,22 +130,22 @@ async def admin_regenerate_diagnostic_exam(
 ):
     """重新生成基线诊断考试"""
     try:
-        # 使用模板化组卷服务生成诊断考试
-        from ....services.paper_template import build_diagnostic_paper
+        # 使用行测五模块均衡组卷服务生成诊断考试
+        from ....services.paper_template import build_xingce_diagnostic_exam
 
-        paper, exam = build_diagnostic_paper(
+        exam = build_xingce_diagnostic_exam(
             db=db,
-            subject="XINGCE",  # 默认行测诊断
-            per_module=1,      # 每个模块至少1道题（测试用，生产环境可调整）
-            created_by=current_user["id"]
+            created_by=current_user["id"],
+            per_module=2,      # 每个模块2道题
+            max_difficulty=2   # 最大难度2
         )
 
-        # build_diagnostic_paper 已经提交了事务，这里不需要再提交
+        # build_xingce_diagnostic_exam 已经提交了事务
         return {
             "exam_id": exam.id,
-            "paper_id": paper.id,
+            "paper_id": exam.paper_id,
             "title": exam.title,
-            "message": "基线诊断考试重新生成成功"
+            "message": "行测诊断考试重新生成成功"
         }
 
     except Exception as e:

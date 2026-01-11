@@ -55,14 +55,14 @@
         </el-col>
       </el-row>
 
-      <!-- 知识点掌握度雷达图 -->
+      <!-- 行测五模块掌握度雷达图 -->
       <el-row :gutter="20" style="margin-top: 20px;">
         <el-col :span="24">
           <el-card>
             <template #header>
               <div class="header-row">
-                <h4>知识点掌握度雷达图</h4>
-                <el-text type="info">展示最薄弱的6个知识点掌握情况</el-text>
+                <h4>行测五模块掌握度雷达图</h4>
+                <el-text type="info">展示行测五个模块的掌握情况</el-text>
               </div>
             </template>
             <v-chart :option="radarOption" autoresize style="height:400px" v-if="radarOption"></v-chart>
@@ -135,13 +135,22 @@ const loadMasteryTop = async () => {
 
 const loadKnowledgeState = async () => {
   try {
-    const res = await authStore.api.get('/analytics/student/knowledge-state?limit=6')
-    const items = res.data.items || []
+    // 优先调用新的模块掌握度API
+    let res = await authStore.api.get('/analytics/student/module-mastery?subject=XINGCE')
+    let items = res.data.items || []
+
+    if (!items.length) {
+      // 如果新接口没有数据，fallback到旧接口
+      console.warn('新模块掌握度接口无数据，尝试fallback到旧接口')
+      res = await authStore.api.get('/analytics/student/knowledge-state?limit=6')
+      items = res.data.items || []
+    }
+
     if (items.length) {
       // 雷达图配置
       radarOption.value = {
         title: {
-          text: '知识点掌握度雷达图',
+          text: '行测五模块掌握度雷达图',
           left: 'center'
         },
         tooltip: {
@@ -151,10 +160,14 @@ const loadKnowledgeState = async () => {
           }
         },
         radar: {
-          indicator: items.map(item => ({
-            name: item.name,
-            max: 100
-          })),
+          // 固定为5个模块维度
+          indicator: [
+            { name: '常识判断', max: 100 },
+            { name: '言语理解与表达', max: 100 },
+            { name: '数量关系', max: 100 },
+            { name: '判断推理', max: 100 },
+            { name: '资料分析', max: 100 }
+          ],
           center: ['50%', '50%'],
           radius: '60%'
         },
@@ -162,7 +175,7 @@ const loadKnowledgeState = async () => {
           name: '掌握度',
           type: 'radar',
           data: [{
-            value: items.map(item => item.mastery),
+            value: items.length === 5 ? items.map(item => item.mastery) : [0, 0, 0, 0, 0], // 确保5个值
             name: '掌握度',
             areaStyle: {
               opacity: 0.3
@@ -176,7 +189,8 @@ const loadKnowledgeState = async () => {
     }
   } catch (e) {
     // 接口失败时显示错误提示
-    ElMessage.error('获取知识点掌握度数据失败')
+    ElMessage.error('获取模块掌握度数据失败')
+    console.error('loadKnowledgeState error:', e)
   }
 }
 
