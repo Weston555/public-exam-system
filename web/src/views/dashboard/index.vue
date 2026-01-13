@@ -63,10 +63,10 @@
               <div class="header-row">
                 <h4>公考模块掌握度雷达图</h4>
                 <div style="display: flex; align-items: center; gap: 16px;">
-                  <el-segmented v-model="subject" style="margin: 0;">
-                    <el-segmented-item label="行测（常识/言语/数量/判断/资料）" value="XINGCE" />
-                    <el-segmented-item label="申论（归纳/综合/对策/应用文/文章）" value="SHENLUN" />
-                  </el-segmented>
+                  <el-radio-group v-model="subject" style="margin: 0;">
+                    <el-radio-button label="XINGCE">行测</el-radio-button>
+                    <el-radio-button label="SHENLUN">申论</el-radio-button>
+                  </el-radio-group>
                 </div>
               </div>
             </template>

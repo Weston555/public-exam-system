@@ -49,8 +49,12 @@
         <el-header class="header">
           <div class="breadcrumb">个性化学习路径推荐系统 - 学员端</div>
           <div class="user-area">
-            <el-avatar :size="30" style="background: #409EFF">郭</el-avatar>
-            <span class="username">郭东凯 (软件24230)</span>
+            <el-avatar :size="30" style="background: #409EFF">{{ usernameInitial }}</el-avatar>
+            <span class="username">{{ username }}</span>
+            <el-button type="text" @click="handleLogout" style="margin-left: 15px; color: #606266;">
+              <el-icon><SwitchButton /></el-icon>
+              退出登录
+            </el-button>
           </div>
         </el-header>
 
@@ -60,6 +64,26 @@
     </el-container>
   </div>
 </template>
+
+<script setup>
+import { computed } from 'vue'
+import { useAuthStore } from '../stores/auth'
+import { HomeFilled, Aim, Guide, EditPen, DataAnalysis, DocumentDelete, Trophy, SwitchButton } from '@element-plus/icons-vue'
+
+const authStore = useAuthStore()
+
+const username = computed(() => authStore.username)
+const usernameInitial = computed(() => {
+  if (authStore.username) {
+    return authStore.username.charAt(0).toUpperCase()
+  }
+  return '用'
+})
+
+const handleLogout = () => {
+  authStore.logout()
+}
+</script>
 
 <style scoped>
 .layout-container { height: 100vh; }

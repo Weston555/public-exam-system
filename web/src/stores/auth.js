@@ -1,7 +1,13 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { useRouter } from 'vue-router'
 import axios from 'axios'
+import router from '../router'
+
+// 在store外部创建axios实例，确保始终可用
+const api = axios.create({
+  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1',
+  timeout: 10000
+})
 
 export const useAuthStore = defineStore('auth', () => {
   const token = ref(localStorage.getItem('token') || '')
@@ -9,14 +15,6 @@ export const useAuthStore = defineStore('auth', () => {
   const username = ref(localStorage.getItem('username') || '')
 
   const isAuthenticated = computed(() => !!token.value)
-
-  const router = useRouter()
-
-  // 配置axios实例
-  const api = axios.create({
-    baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1',
-    timeout: 10000
-  })
 
   // 设置axios请求拦截器
   api.interceptors.request.use(
