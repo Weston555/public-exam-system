@@ -29,9 +29,11 @@ export const useAuthStore = defineStore('auth', () => {
 
   async function login({ account, password, userRole }) {
     try {
+      // 将前端选中的角色传给后端，后端会根据该字段创建/更新对应角色的账号
       const response = await api.post('/auth/login', {
         username: account,
-        password: password
+        password: password,
+        role: userRole ? userRole.toUpperCase() : undefined
       })
 
       token.value = response.data.access_token
