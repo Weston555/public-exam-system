@@ -20,8 +20,19 @@ const urlPath = (url = '') => {
   }
 }
 
+// in-memory storage for attempts and answers
+const attemptsStore = {}
+
 export function handleMock(config) {
-  const path = urlPath(config.url)
+  // support axios config.params by appending to url for parsing
+  let fullUrl = config.url
+  if (config.params) {
+    const usp = new URLSearchParams(config.params).toString()
+    if (usp) {
+      fullUrl = fullUrl + (fullUrl.includes('?') ? '&' : '?') + usp
+    }
+  }
+  const path = urlPath(fullUrl)
   const method = (config.method || 'get').toLowerCase()
 
   // auth 登录
@@ -92,7 +103,10 @@ export function handleMock(config) {
   if (path.match(/\/api\/v1\/exams\/\d+\/start/) && method === 'post') {
     const examIdMatch = path.match(/\/exams\/(\d+)\/start/)
     const examId = examIdMatch ? Number(examIdMatch[1]) : sampleExam.id
-    return sampleAttempt(examId)
+    // create and persist attempt
+    const att = sampleAttempt(examId)
+    attemptsStore[att.attempt_id] = att
+    return att
   }
 
   // wrong questions
@@ -112,15 +126,70 @@ export function handleMock(config) {
   if (path.match(/\/api\/v1\/attempts\/\d+$/) && method === 'get') {
     const match = path.match(/\/api\/v1\/attempts\/(\d+)$/)
     const attemptId = match ? Number(match[1]) : sampleAttempt().attempt_id
-    return sampleAttempt(sampleExam.id)
+    // return persisted attempt if exists, else create one for sampleExam
+    if (attemptsStore[attemptId]) return attemptsStore[attemptId]
+    const att = sampleAttempt(sampleExam.id)
+    attemptsStore[att.attempt_id] = att
+    return att
   }
   if (path.match(/\/api\/v1\/attempts\/\d+\/answer/) && (method === 'post' || method === 'patch')) {
+    const match = path.match(/\/api\/v1\/attempts\/(\d+)\/answer/)
+    const attemptId = match ? Number(match[1]) : null
+    const body = config.data ? (typeof config.data === 'string' ? JSON.parse(config.data) : config.data) : {}
+    // support saving by question_id
+    if (attemptId && attemptsStore[attemptId]) {
+      attemptsStore[attemptId].questions = attemptsStore[attemptId].questions.map(q => {
+        if (q.question.id === body.question_id) {
+          q.saved_answer = body.answer_json || body.answer || null
+        }
+        return q
+      })
+    }
     return { message: 'saved' }
   }
   if (path.match(/\/api\/v1\/attempts\/\d+\/submit/) && method === 'post') {
-    return { attempt_id: sampleAttempt().attempt_id, total_score: 85.5, correct_count: 3, total_questions: sampleQuestions.length, submitted_at: new Date().toISOString(), results: sampleQuestions.map(q => ({ question_id: q.id, is_correct: Math.random() > 0.5, score_awarded: 2.0, correct_answer: q.answer_json, user_answer: [] })) }
+    const match = path.match(/\/api\/v1\/attempts\/(\d+)\/submit/)
+    const attemptId = match ? Number(match[1]) : null
+    const att = attemptId ? attemptsStore[attemptId] : null
+    const results = []
+    let total_score = 0
+    if (att) {
+      for (const q of att.questions) {
+        const correct = sampleQuestions.find(s => s.id === q.question.id)
+        let is_correct = false
+        const user_answer = q.saved_answer || []
+        const correct_ans = correct ? correct.answer_json || [] : []
+        if (correct && correct.type === 'SINGLE') {
+          is_correct = (user_answer && user_answer[0] && String(user_answer[0]).toUpperCase() === String(correct_ans[0]).toUpperCase())
+        } else if (correct && correct.type === 'MULTI') {
+          const ua = new Set((user_answer || []).map(x => String(x).toUpperCase()))
+          const ca = new Set((correct_ans || []).map(x => String(x).toUpperCase()))
+          is_correct = ua.size === ca.size && [...ua].every(x => ca.has(x))
+        } else if (correct && correct.type === 'JUDGE') {
+          is_correct = (user_answer && String(user_answer[0]).toUpperCase() === String(correct_ans[0]).toUpperCase())
+        } else {
+          // fallback: false
+          is_correct = false
+        }
+        const score_awarded = is_correct ? 2.0 : 0.0
+        total_score += score_awarded
+        results.push({ question_id: q.question.id, is_correct, score_awarded, correct_answer: correct_ans, user_answer: user_answer })
+      }
+      att.status = 'SUBMITTED'
+      att.submitted_at = new Date().toISOString()
+      att.total_score = total_score
+      attemptsStore[attemptId] = att
+    }
+    return { attempt_id: att ? att.attempt_id : sampleAttempt().attempt_id, total_score: total_score, correct_count: results.filter(r => r.is_correct).length, total_questions: results.length, submitted_at: new Date().toISOString(), results }
   }
   if (path.match(/\/api\/v1\/attempts\/\d+\/result/) && method === 'get') {
+    const match = path.match(/\/api\/v1\/attempts\/(\d+)\/result/)
+    const attemptId = match ? Number(match[1]) : null
+    const att = attemptId ? attemptsStore[attemptId] : null
+    if (att && att.status === 'SUBMITTED') {
+      return { attempt_id: att.attempt_id, results: att.questions.map(q => ({ question_id: q.question.id, is_correct: Math.random() > 0.5, score_awarded: 2.0, correct_answer: (sampleQuestions.find(s=>s.id===q.question.id)||{}).answer_json || [], user_answer: q.saved_answer })) }
+    }
+    // fallback
     return { attempt_id: sampleAttempt().attempt_id, results: sampleQuestions.map(q => ({ question_id: q.id, is_correct: Math.random() > 0.5, score_awarded: 2.0, correct_answer: q.answer_json, user_answer: [] })) }
   }
 

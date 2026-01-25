@@ -15,29 +15,18 @@ const DEMO_MODE = (import.meta.env.VITE_DEMO_MODE === 'true') || false
 if (DEMO_MODE) {
   // 延迟加载 mock 处理，避免在非浏览器环境报错
   import('../mock/apiMock').then(({ handleMock }) => {
-    // 请求拦截：当为 demo 模式时，直接在 response interceptor 上处理 mock
+    // 在请求拦截器中短路：为每个请求设置 adapter，直接使用 mock 返回值，不走网络
     api.interceptors.request.use((config) => {
-      // 标记为 demo 以便 response 拦截器识别
-      config.__isDemo = true
+      config.adapter = function () {
+        try {
+          const result = handleMock(config)
+          return Promise.resolve({ data: result, status: 200, config })
+        } catch (e) {
+          return Promise.resolve({ data: {}, status: 200, config })
+        }
+      }
       return config
     })
-
-    api.interceptors.response.use(
-      (resp) => resp,
-      (error) => {
-        // 如果是本库发起的 demo 请求，转换为 mock 响应
-        const cfg = error.config || {}
-        if (cfg.__isDemo) {
-          try {
-            const mockData = handleMock(cfg)
-            return Promise.resolve({ data: mockData, status: 200, config: cfg })
-          } catch (e) {
-            return Promise.resolve({ data: {}, status: 200, config: cfg })
-          }
-        }
-        return Promise.reject(error)
-      }
-    )
   })
 }
 export const useAuthStore = defineStore('auth', () => {
