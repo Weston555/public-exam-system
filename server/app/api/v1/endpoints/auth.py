@@ -5,7 +5,8 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
 from ....core.database import get_db
-from ....core.security import get_password_hash, create_access_token
+from ....core.security import get_password_hash, create_access_token, verify_password
+from ....core.config import settings
 from ....models.user import User
 
 router = APIRouter()
@@ -58,37 +59,54 @@ async def login(
     db: Session = Depends(get_db)
 ):
     """用户登录"""
-    # 查找用户；如果不存在则自动创建（以便任意账号密码都能登录）
+    # 查找用户
     user = db.query(User).filter(User.username == request.username).first()
-    if not user:
-        # 创建用户并持久化，角色参考请求中的 role，否则默认 STUDENT
-        role_to_set = (request.role or "STUDENT").upper()
-        # 为避免在 login 路径对任意密码做复杂哈希（可能在某些环境触发 bcrypt 限制），
-        # 在此使用空字符串作为占位密码哈希（登录不会校验密码）
-        hashed_password = ""
-        db_user = User(
-            username=request.username,
-            password_hash=hashed_password,
-            role=role_to_set
-        )
-        db.add(db_user)
-        db.commit()
-        db.refresh(db_user)
-        user = db_user
-    else:
-        # 如果请求带了 role，则同步更新用户角色（方便管理员端直接以 admin 登录）
-        if request.role:
-            user.role = request.role.upper()
-            db.add(user)
-            db.commit()
-            db.refresh(user)
 
-    # 注意：按照需求，登录时接受任意密码（不再校验密码），但依然校验账号状态
-    if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="账号已被禁用"
-        )
+    if settings.allow_any_login:
+        # 允许任意账号密码登录（演示/本地调试模式）
+        if not user:
+            # 自动创建用户并设置为请求角色或默认 STUDENT
+            role_to_set = (request.role or "STUDENT").upper()
+            db_user = User(
+                username=request.username,
+                password_hash="",  # 占位，不用于验证
+                role=role_to_set
+            )
+            db.add(db_user)
+            db.commit()
+            db.refresh(db_user)
+            user = db_user
+        else:
+            if request.role:
+                user.role = request.role.upper()
+                db.add(user)
+                db.commit()
+                db.refresh(user)
+
+        if not user.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="账号已被禁用"
+            )
+    else:
+        # 正常认证流程：必须存在且密码验证通过
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="用户名或密码错误"
+            )
+
+        if not verify_password(request.password, user.password_hash):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="用户名或密码错误"
+            )
+
+        if not user.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="账号已被禁用"
+            )
 
     # 创建访问令牌并返回（保持原有返回结构）
     access_token = create_access_token(

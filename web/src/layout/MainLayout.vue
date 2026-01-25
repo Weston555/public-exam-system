@@ -14,34 +14,12 @@
           active-text-color="#409EFF"
           class="el-menu-vertical"
         >
-          <el-menu-item index="/home">
-            <el-icon><HomeFilled /></el-icon>
-            <span>首页概览</span>
-          </el-menu-item>
-          <el-menu-item index="/goal">
-            <el-icon><Aim /></el-icon>
-            <span>学习目标</span>
-          </el-menu-item>
-          <el-menu-item index="/plan">
-            <el-icon><Guide /></el-icon>
-            <span>学习路径推荐</span>
-          </el-menu-item>
-          <el-menu-item index="/practice">
-            <el-icon><EditPen /></el-icon>
-            <span>针对性练习</span>
-          </el-menu-item>
-          <el-menu-item index="/diagnostic">
-            <el-icon><DataAnalysis /></el-icon>
-            <span>基线诊断</span>
-          </el-menu-item>
-          <el-menu-item index="/wrong">
-            <el-icon><DocumentDelete /></el-icon>
-            <span>错题本</span>
-          </el-menu-item>
-          <el-menu-item index="/mock">
-            <el-icon><Trophy /></el-icon>
-            <span>模拟考试</span>
-          </el-menu-item>
+          <template v-for="item in studentMenu">
+            <el-menu-item :key="item.index" :index="item.index">
+              <el-icon><component :is="item.icon" /></el-icon>
+              <span>{{ item.label }}</span>
+            </el-menu-item>
+          </template>
         </el-menu>
       </el-aside>
 
@@ -69,6 +47,7 @@
 import { computed } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import { HomeFilled, Aim, Guide, EditPen, DataAnalysis, DocumentDelete, Trophy, SwitchButton } from '@element-plus/icons-vue'
+import { studentMenu as sidebarStudentMenu } from '../config/sidebar'
 
 const authStore = useAuthStore()
 
@@ -83,6 +62,8 @@ const usernameInitial = computed(() => {
 const handleLogout = () => {
   authStore.logout()
 }
+// 导出菜单数据供模板使用
+const studentMenu = sidebarStudentMenu
 </script>
 
 <style scoped>

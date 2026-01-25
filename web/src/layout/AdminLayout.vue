@@ -14,30 +14,12 @@
           active-text-color="#409EFF"
           class="el-menu-vertical"
         >
-          <el-menu-item index="/admin">
-            <el-icon><DataBoard /></el-icon>
-            <span>数据总览</span>
-          </el-menu-item>
-          <el-menu-item index="/admin/syllabus">
-            <el-icon><Collection /></el-icon>
-            <span>考试大纲管理</span>
-          </el-menu-item>
-          <el-menu-item index="/admin/knowledge">
-            <el-icon><List /></el-icon>
-            <span>知识点树管理</span>
-          </el-menu-item>
-          <el-menu-item index="/admin/questions">
-            <el-icon><Edit /></el-icon>
-            <span>题库与资源</span>
-          </el-menu-item>
-          <el-menu-item index="/admin/strategy">
-            <el-icon><Setting /></el-icon>
-            <span>推荐策略配置</span>
-          </el-menu-item>
-          <el-menu-item index="/admin/users">
-            <el-icon><User /></el-icon>
-            <span>用户与权限</span>
-          </el-menu-item>
+          <template v-for="item in adminMenu">
+            <el-menu-item :key="item.index" :index="item.index">
+              <el-icon><component :is="item.icon" /></el-icon>
+              <span>{{ item.label }}</span>
+            </el-menu-item>
+          </template>
         </el-menu>
       </el-aside>
 
@@ -69,6 +51,7 @@
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import { adminMenu as sidebarAdminMenu } from '../config/sidebar'
 
 const route = useRoute()
 const router = useRouter()
@@ -83,6 +66,8 @@ const handleLogout = () => {
 const goStudent = () => {
   router.push('/home')
 }
+// 导出菜单数据供模板使用
+const adminMenu = sidebarAdminMenu
 </script>
 
 <style scoped>

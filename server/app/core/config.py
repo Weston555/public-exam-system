@@ -21,6 +21,8 @@ class Settings(BaseSettings):
     jwt_secret: str = "your-super-secret-jwt-key-change-this-in-production"
     jwt_algorithm: str = "HS256"
     jwt_access_token_expire_minutes: int = 30
+    # 是否允许任意账号密码登录（用于演示/本地调试），生产环境应关闭
+    allow_any_login: bool = True
 
     # CORS 配置
     # 支持通过环境变量传入 JSON 列表或逗号分隔字符串
