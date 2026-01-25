@@ -59,7 +59,8 @@ const generateReview = async () => {
     const examId = res.data.exam_id
     const startRes = await authStore.api.post(`/exams/${examId}/start`)
     const attemptId = startRes.data.attempt_id
-    window.location.href = `/exam?attempt_id=${attemptId}`
+    // use router.push to avoid full page reload (demo mode)
+    router.push({ path: '/exam', query: { attempt_id: attemptId } })
   } catch (e) {
     ElMessage.error(e.response?.data?.detail || '生成复习失败')
   } finally {

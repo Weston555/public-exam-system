@@ -20,8 +20,27 @@ const urlPath = (url = '') => {
   }
 }
 
-// in-memory storage for attempts and answers
-const attemptsStore = {}
+// in-memory storage for attempts and answers (persisted to localStorage for demo stability)
+const ATTEMPTS_KEY = 'demo_attempts_v1'
+let attemptsStore = {}
+
+// load persisted attempts from localStorage
+try {
+  const raw = localStorage.getItem(ATTEMPTS_KEY)
+  if (raw) {
+    attemptsStore = JSON.parse(raw) || {}
+  }
+} catch (e) {
+  attemptsStore = {}
+}
+
+function persistAttempts() {
+  try {
+    localStorage.setItem(ATTEMPTS_KEY, JSON.stringify(attemptsStore))
+  } catch (e) {
+    // ignore
+  }
+}
 
 export function handleMock(config) {
   // support axios config.params by appending to url for parsing
@@ -106,6 +125,7 @@ export function handleMock(config) {
     // create and persist attempt
     const att = sampleAttempt(examId)
     attemptsStore[att.attempt_id] = att
+    persistAttempts()
     return att
   }
 
@@ -130,6 +150,7 @@ export function handleMock(config) {
     if (attemptsStore[attemptId]) return attemptsStore[attemptId]
     const att = sampleAttempt(sampleExam.id)
     attemptsStore[att.attempt_id] = att
+    persistAttempts()
     return att
   }
   if (path.match(/\/api\/v1\/attempts\/\d+\/answer/) && (method === 'post' || method === 'patch')) {
@@ -139,11 +160,12 @@ export function handleMock(config) {
     // support saving by question_id
     if (attemptId && attemptsStore[attemptId]) {
       attemptsStore[attemptId].questions = attemptsStore[attemptId].questions.map(q => {
-        if (q.question.id === body.question_id) {
-          q.saved_answer = body.answer_json || body.answer || null
+        if (q.question.id === body.question_id || q.question.id === body.questionId) {
+          q.saved_answer = body.answer_json || body.answer || body.user_answer || null
         }
         return q
       })
+      persistAttempts()
     }
     return { message: 'saved' }
   }
@@ -179,6 +201,7 @@ export function handleMock(config) {
       att.submitted_at = new Date().toISOString()
       att.total_score = total_score
       attemptsStore[attemptId] = att
+      persistAttempts()
     }
     return { attempt_id: att ? att.attempt_id : sampleAttempt().attempt_id, total_score: total_score, correct_count: results.filter(r => r.is_correct).length, total_questions: results.length, submitted_at: new Date().toISOString(), results }
   }
