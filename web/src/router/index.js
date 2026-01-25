@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import MainLayout from '../layout/MainLayout.vue'
 import AdminLayout from '../layout/AdminLayout.vue'
 import { useAuthStore } from '../stores/auth'
+const DEMO_MODE = (import.meta.env.VITE_DEMO_MODE === 'true') || false
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -131,6 +132,11 @@ const router = createRouter({
 // 简单路由守卫：鉴权 + 角色控制
 router.beforeEach((to, from, next) => {
   const authStore = useAuthStore()
+
+  // 演示模式下放行所有需要鉴权的路由（前端使用 mock 数据）
+  if (DEMO_MODE) {
+    return next()
+  }
 
   if (!to.meta.requiresAuth) {
     return next()
