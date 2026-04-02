@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import axios from 'axios'
 import router from '../router'
+import { handleMock } from '../mock/apiMock'
 
 // 在store外部创建axios实例，确保始终可用
 const api = axios.create({
@@ -12,21 +13,18 @@ const api = axios.create({
 // DEMO 模式开关（在 .env.development 中设置 VITE_DEMO_MODE=true）
 const DEMO_MODE = (import.meta.env.VITE_DEMO_MODE === 'true') || false
 
+// If demo mode, synchronously set axios adapter to use mock handler
 if (DEMO_MODE) {
-  // 延迟加载 mock 处理，避免在非浏览器环境报错
-  import('../mock/apiMock').then(({ handleMock }) => {
-    // 在请求拦截器中短路：为每个请求设置 adapter，直接使用 mock 返回值，不走网络
-    api.interceptors.request.use((config) => {
-      config.adapter = function () {
-        try {
-          const result = handleMock(config)
-          return Promise.resolve({ data: result, status: 200, config })
-        } catch (e) {
-          return Promise.resolve({ data: {}, status: 200, config })
-        }
+  api.interceptors.request.use((config) => {
+    config.adapter = function () {
+      try {
+        const result = handleMock(config)
+        return Promise.resolve({ data: result, status: 200, config })
+      } catch (e) {
+        return Promise.resolve({ data: {}, status: 200, config })
       }
-      return config
-    })
+    }
+    return config
   })
 }
 export const useAuthStore = defineStore('auth', () => {
